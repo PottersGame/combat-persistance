@@ -10,13 +10,14 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CombatEvents {
     
+    // Players who joined and need to be killed on the next tick to avoid "ghost state" bugs
+    private static final Set<UUID> pendingJoinDeaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
     public static void register(CombatTracker tracker, CombatConfig config) {
         
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
@@ -38,35 +39,29 @@ public class CombatEvents {
             ServerPlayer player = handler.getPlayer();
             
             if (tracker.isInCombat(player)) {
-                // Collect full inventory for persistence
                 List<ItemStack> fullInv = new ArrayList<>();
                 for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
                     fullInv.add(player.getInventory().getItem(i).copy());
                 }
 
                 CombatNPC npc = CombatNPC.spawn(player);
-                // Save to disk via tracker
                 tracker.addNPC(player.getUUID(), npc.getUUID(), fullInv, (ServerLevel) player.level());
                 
                 Combatpersistence.LOGGER.info("Player {} logged out in combat! Spawned NPC.", player.getName().getString());
             }
         });
 
-        // The death of NPC is now handled by tracker.handleEntityDeath via Mixin
-        // because standard events might miss it after a server restart.
-
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayer player = handler.getPlayer();
+            UUID uuid = player.getUUID();
             
-            if (tracker.checkAndClearOfflineDeath(player.getUUID())) {
+            if (tracker.checkAndClearOfflineDeath(uuid)) {
                 player.getInventory().clearContent();
-                DamageSource generic = player.level().damageSources().generic();
-                player.die(generic);
-                Combatpersistence.LOGGER.info("Player {} logged in dead due to combat logging.", player.getName().getString());
+                pendingJoinDeaths.add(uuid);
+                Combatpersistence.LOGGER.info("Player {} marked for delayed death due to combat logging.", player.getName().getString());
             } else {
-                UUID npcUuid = tracker.getNPCForPlayer(player.getUUID());
+                UUID npcUuid = tracker.getNPCForPlayer(uuid);
                 if (npcUuid != null) {
-                    // Remove NPC if it exists in the world
                     for (ServerLevel level : server.getAllLevels()) {
                         Entity npcEntity = level.getEntity(npcUuid);
                         if (npcEntity != null) {
@@ -74,8 +69,27 @@ public class CombatEvents {
                             break;
                         }
                     }
-                    tracker.removeNPC(player.getUUID());
+                    tracker.removeNPC(uuid);
                     Combatpersistence.LOGGER.info("Player {} rejoined safely. Removed NPC.", player.getName().getString());
+                }
+            }
+        });
+
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (!pendingJoinDeaths.isEmpty()) {
+                Iterator<UUID> iterator = pendingJoinDeaths.iterator();
+                while (iterator.hasNext()) {
+                    UUID uuid = iterator.next();
+                    ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+                    // Check if player exists and is connected
+                    if (player != null) {
+                        player.getInventory().clearContent();
+                        DamageSource generic = player.level().damageSources().generic();
+                        player.setHealth(0.0f);
+                        player.die(generic);
+                        iterator.remove();
+                        Combatpersistence.LOGGER.info("Executed delayed death for player {}.", player.getName().getString());
+                    }
                 }
             }
         });
