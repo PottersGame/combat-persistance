@@ -3,7 +3,8 @@
 	"package": "com.adam.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
-		"CombatMixin"
+		"CombatCommandMixin",
+		"CombatDeathMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
