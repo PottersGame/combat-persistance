@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.MinecraftServer;
@@ -11,9 +12,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.io.InputStreamReader;
+import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class SkinManager {
@@ -55,10 +58,29 @@ public class SkinManager {
         fetchSkin(skinName).thenAccept(skinProperty -> {
             if (skinProperty != null) {
                 server.execute(() -> {
-                    // Update player's local properties
-                    GameProfile profile = player.getGameProfile();
-                    profile.properties().removeAll("textures");
-                    profile.properties().put("textures", skinProperty);
+                    // Get the player's current GameProfile
+                    GameProfile playerProfile = player.getGameProfile();
+                    
+                    // Create a new mutable PropertyMap
+                    PropertyMap mutableProperties = new PropertyMap();
+                    
+                    // Copy existing properties from the player's GameProfile to the new mutable map
+                    for (Map.Entry<String, Property> entry : playerProfile.getProperties().entries()) {
+                        mutableProperties.put(entry.getKey(), entry.getValue());
+                    }
+                    
+                    // Remove existing "textures" properties and add the new one
+                    mutableProperties.removeAll("textures");
+                    mutableProperties.put("textures", skinProperty);
+                    
+                    // Assign the modified properties back to the GameProfile using reflection
+                    try {
+                        Field propertiesField = GameProfile.class.getDeclaredField("properties");
+                        propertiesField.setAccessible(true);
+                        propertiesField.set(playerProfile, mutableProperties);
+                    } catch (NoSuchFieldException | IllegalAccessException e) {
+                        Combatpersistence.LOGGER.error("Failed to set properties for GameProfile", e);
+                    }
                     
                     // Refresh player for everyone
                     refreshPlayer(player);

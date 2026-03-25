@@ -81,7 +81,8 @@ public class CombatEvents {
             UUID uuid = player.getUUID();
             joinTimes.put(uuid, System.currentTimeMillis());
             
-            if (tracker.checkAndClearOfflineDeath(uuid)) {
+            boolean wasOfflineKilled = tracker.checkAndClearOfflineDeath(uuid);
+            if (wasOfflineKilled) {
                 player.getInventory().clearContent();
                 Combatpersistence.pendingJoinDeaths.add(uuid);
             }
@@ -124,23 +125,13 @@ public class CombatEvents {
                 }
             } else {
                 cleanUpNpc(player, tracker, server);
+                // If no auth, handle pending death immediately
+                handlePendingDeath(player);
             }
         });
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             long now = System.currentTimeMillis();
-
-            Combatpersistence.pendingJoinDeaths.removeIf(uuid -> {
-                ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-                if (player != null) {
-                    player.getInventory().clearContent();
-                    DamageSource generic = player.level().damageSources().generic();
-                    player.setHealth(0.0f);
-                    player.die(generic);
-                    return true;
-                }
-                return false;
-            });
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 UUID uuid = player.getUUID();
@@ -182,6 +173,14 @@ public class CombatEvents {
                 }
             }
         });
+    }
+
+    public static void handlePendingDeath(ServerPlayer player) {
+        if (Combatpersistence.pendingJoinDeaths.remove(player.getUUID())) {
+            player.getInventory().clearContent();
+            player.setHealth(0.0f);
+            player.die(player.level().damageSources().generic());
+        }
     }
 
     private static void cleanUpNpc(ServerPlayer player, CombatTracker tracker, net.minecraft.server.MinecraftServer server) {

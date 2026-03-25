@@ -1,6 +1,8 @@
 package com.adam;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
 import com.mojang.authlib.yggdrasil.ProfileResult;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -17,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -24,7 +27,6 @@ public class CombatNPC extends Mannequin {
 
     public final UUID originalPlayerUuid;
     private final String originalPlayerName;
-    private final List<ItemStack> extraInventory = new ArrayList<>();
     private boolean hasDropped = false;
 
     public CombatNPC(ServerLevel world, UUID originalPlayerUuid, String originalPlayerName) {
@@ -53,8 +55,24 @@ public class CombatNPC extends Mannequin {
                 if (skinProperty != null) {
                     server.execute(() -> {
                         if (!npc.isRemoved()) {
-                            GameProfile updatedProfile = new GameProfile(original.getUUID(), playerName);
-                            updatedProfile.properties().put("textures", skinProperty);
+                            // Get the existing GameProfile properties from the original player
+                            PropertyMap existingProperties = original.getGameProfile().getProperties();
+                            
+                            // Create a new mutable PropertyMap
+                            PropertyMap mutableProperties = new PropertyMap();
+                            
+                            // Copy existing properties to the new mutable map
+                            for (Map.Entry<String, Property> entry : existingProperties.entries()) {
+                                mutableProperties.put(entry.getKey(), entry.getValue());
+                            }
+                            
+                            // Add the new skin property
+                            mutableProperties.put("textures", skinProperty);
+                            
+                            // Create a new GameProfile with the updated properties
+                            GameProfile updatedProfile = new GameProfile(original.getUUID(), playerName, mutableProperties);
+                            
+                            // Set the ResolvableProfile component for the NPC
                             npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(updatedProfile));
                         }
                     });
@@ -80,14 +98,6 @@ public class CombatNPC extends Mannequin {
             npc.setItemSlot(slot, original.getItemBySlot(slot).copy());
         }
 
-        // Store Full Inventory for drop-on-death
-        for (int i = 0; i < original.getInventory().getContainerSize(); i++) {
-            ItemStack stack = original.getInventory().getItem(i);
-            if (!stack.isEmpty()) {
-                npc.extraInventory.add(stack.copy());
-            }
-        }
-
         world.addFreshEntity(npc);
 
         if (config.playSpawnSound) {
@@ -107,32 +117,21 @@ public class CombatNPC extends Mannequin {
     @Override
     public void die(DamageSource damageSource) {
         if (!hasDropped) {
-            dropExtraInventory();
-            Combatpersistence.tracker.markOfflineDeath(this.originalPlayerUuid);
-            Combatpersistence.tracker.removeNPC(this.originalPlayerUuid);
-            
-            // Fix A: Clear equipment so vanilla logic doesn't drop it (preventing armor dupe)
-            for (EquipmentSlot slot : EquipmentSlot.values()) {
-                this.setItemSlot(slot, ItemStack.EMPTY);
-            }
-            
-            // Fix B: Broadcast the kill
+            // Broadcast the kill
             if (this.level() instanceof ServerLevel world) {
                 Component deathMsg = Component.literal("§c[PvP] §7" + this.originalPlayerName + " combat logged and was slain!");
                 world.getServer().getPlayerList().broadcastSystemMessage(deathMsg, false);
             }
+
+            // Fix A: Clear equipment so vanilla logic doesn't drop it (preventing armor dupe)
+            // The items will be dropped by the tracker (CombatDeathMixin)
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
+                this.setItemSlot(slot, ItemStack.EMPTY);
+            }
+            
             hasDropped = true;
         }
         super.die(damageSource);
-    }
-
-    public void dropExtraInventory() {
-        if (this.level() instanceof ServerLevel serverLevel) {
-            for (ItemStack stack : extraInventory) {
-                this.spawnAtLocation(serverLevel, stack);
-            }
-            extraInventory.clear();
-        }
     }
 
     @Override

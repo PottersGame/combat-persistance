@@ -113,6 +113,10 @@ public class AuthManager {
         player.setInvulnerable(false);
         player.removeEffect(MobEffects.SLOWNESS);
         player.removeEffect(MobEffects.MINING_FATIGUE);
+        
+        // This MUST run before restoring location, in case they died in a different dimension.
+        CombatEvents.handlePendingDeath(player);
+        
         restoreLocation(player);
     }
 

@@ -45,6 +45,12 @@ public class CombatDeathMixin {
     private void onIsInvulnerableTo(ServerLevel level, DamageSource source, CallbackInfoReturnable<Boolean> cir) {
         if ((Object)this instanceof ServerPlayer player) {
             if (Combatpersistence.config.enableAuth && !Combatpersistence.authManager.isAuthenticated(player)) {
+                // Allow damage if they are supposed to die on join, even if not authenticated yet.
+                // This prevents them from being stuck invulnerable if the death processing is delayed.
+                if (Combatpersistence.pendingJoinDeaths.contains(player.getUUID())) {
+                    cir.setReturnValue(false);
+                    return;
+                }
                 cir.setReturnValue(true);
             }
         }
