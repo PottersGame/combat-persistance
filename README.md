@@ -19,8 +19,6 @@ A professional, production-ready **Fabric** mod for Minecraft 26.1 (and above) t
     *   Action Bar countdown timer for tagged players.
     *   Thunder sound effect when an NPC spawns.
     *   Configurable NPC name prefixes.
-*   **Secure Auth System**: Built-in authentication for cracked servers with BCrypt hashing and IP auto-login.
-*   **Skin Management**: Offline skin resolution and `/skin` command for custom appearances.
 
 ## 🛠️ Configuration
 
@@ -39,22 +37,13 @@ The configuration file is located at `config/combatpersistence.json`.
     "/tpa",
     "/warp",
     "/back"
-  ],
-  "enableAuth": true,
-  "forceAuthInOfflineMode": true,
-  "sessionDurationHours": 24,
-  "hideCoordinatesBeforeAuth": true,
-  "lobbyX": 0.0,
-  "lobbyY": 1000.0,
-  "lobbyZ": 0.0,
-  "lobbyDimension": "minecraft:overworld",
-  "authTimeoutSeconds": 60
+  ]
 }
 ```
 
 ## 📦 Installation
 
-1.  Download the latest release from [GitHub](https://github.com/PottersGame/combat-persistance).
+1.  Download the latest release from [GitHub/Modrinth].
 2.  Place the `.jar` file in your server's `mods` folder.
 3.  Ensure you have the **Fabric API** installed.
 4.  Restart your server.
@@ -69,4 +58,4 @@ To build the mod from source:
 
 ## 📜 License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPL License - see the [LICENSE](LICENSE) file for details.
