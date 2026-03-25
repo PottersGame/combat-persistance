@@ -1,7 +1,10 @@
 package com.adam;
 
+import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.yggdrasil.ProfileResult;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -15,6 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class CombatNPC extends Mannequin {
 
@@ -29,19 +33,44 @@ public class CombatNPC extends Mannequin {
 
     public static CombatNPC spawn(ServerPlayer original) {
         ServerLevel world = (ServerLevel) original.level();
+        MinecraftServer server = world.getServer();
         CombatConfig config = Combatpersistence.config;
 
         CombatNPC npc = new CombatNPC(world, original.getUUID());
 
-        // Set Profile for Skin
-        ResolvableProfile profile = ResolvableProfile.createResolved(original.getGameProfile());
-        npc.setComponent(DataComponents.PROFILE, profile);
+        // Initial setup
+        GameProfile currentProfile = original.getGameProfile();
+        npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(currentProfile));
+
+        // ASYNC SKIN RESOLUTION
+        String playerName = original.getName().getString();
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Resolve profile by name
+                var profileOpt = server.services().profileResolver().fetchByName(playerName);
+                if (profileOpt.isPresent()) {
+                    GameProfile mojangProfile = profileOpt.get();
+                    // In Authlib 7, we use id() and name() records
+                    ProfileResult result = server.services().sessionService().fetchProfile(mojangProfile.id(), true);
+                    if (result != null && result.profile() != null) {
+                        final GameProfile finalProfile = result.profile();
+                        server.execute(() -> {
+                            if (!npc.isRemoved()) {
+                                npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(finalProfile));
+                            }
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                Combatpersistence.LOGGER.error("Failed to resolve skin for NPC: {}", playerName, e);
+            }
+        });
 
         // Visuals
-        npc.setCustomName(Component.literal(config.npcNamePrefix + original.getName().getString()));
+        npc.setCustomName(Component.literal(config.npcNamePrefix + playerName));
         npc.setCustomNameVisible(true);
 
-        // Position
+        // Position & Rotation
         npc.setPos(original.getX(), original.getY(), original.getZ());
         npc.setYRot(original.getYRot());
         npc.setXRot(original.getXRot());
