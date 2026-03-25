@@ -10,6 +10,7 @@ public class Combatpersistence implements ModInitializer {
 
     public static CombatConfig config;
     public static final CombatTracker tracker = new CombatTracker();
+    public static final AuthManager authManager = new AuthManager();
 
     @Override
     public void onInitialize() {
@@ -18,6 +19,7 @@ public class Combatpersistence implements ModInitializer {
         config = CombatConfig.load();
 
         CombatEvents.register(tracker, config);
+        AuthCommands.register();
         
         LOGGER.info("Combat tag duration is set to {} seconds.", config.combatTagDurationSeconds);
     }

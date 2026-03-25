@@ -38,33 +38,38 @@ public class CombatNPC extends Mannequin {
 
         CombatNPC npc = new CombatNPC(world, original.getUUID());
 
-        // Initial setup
+        // Use current player's profile (it already has properties if they are logged in)
         GameProfile currentProfile = original.getGameProfile();
         npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(currentProfile));
 
-        // ASYNC SKIN RESOLUTION
         String playerName = original.getName().getString();
-        CompletableFuture.runAsync(() -> {
-            try {
-                // Resolve profile by name
-                var profileOpt = server.services().profileResolver().fetchByName(playerName);
-                if (profileOpt.isPresent()) {
-                    GameProfile mojangProfile = profileOpt.get();
-                    // In Authlib 7, we use id() and name() records
-                    ProfileResult result = server.services().sessionService().fetchProfile(mojangProfile.id(), true);
-                    if (result != null && result.profile() != null) {
-                        final GameProfile finalProfile = result.profile();
-                        server.execute(() -> {
-                            if (!npc.isRemoved()) {
-                                npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(finalProfile));
-                            }
-                        });
+        
+        // Optional: Ensure skin is the latest from Mojang if it's missing
+        if (currentProfile.properties().isEmpty()) {
+            String skinName = Combatpersistence.authManager.getCustomSkin(original.getUUID());
+            if (skinName == null) skinName = playerName;
+            
+            final String finalSkinName = skinName;
+            CompletableFuture.runAsync(() -> {
+                try {
+                    var profileOpt = server.services().profileResolver().fetchByName(finalSkinName);
+                    if (profileOpt.isPresent()) {
+                        GameProfile mojangProfile = profileOpt.get();
+                        ProfileResult result = server.services().sessionService().fetchProfile(mojangProfile.id(), true);
+                        if (result != null && result.profile() != null) {
+                            final GameProfile finalProfile = result.profile();
+                            server.execute(() -> {
+                                if (!npc.isRemoved()) {
+                                    npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(finalProfile));
+                                }
+                            });
+                        }
                     }
+                } catch (Exception e) {
+                    Combatpersistence.LOGGER.error("Failed to resolve skin for NPC: {}", finalSkinName);
                 }
-            } catch (Exception e) {
-                Combatpersistence.LOGGER.error("Failed to resolve skin for NPC: {}", playerName, e);
-            }
-        });
+            });
+        }
 
         // Visuals
         npc.setCustomName(Component.literal(config.npcNamePrefix + playerName));

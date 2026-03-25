@@ -11,17 +11,25 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class
-CombatConfig {
+public class CombatConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final File CONFIG_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "combatpersistence.json");
 
+    // Combat Settings
     public int combatTagDurationSeconds = 15;
     public String npcNamePrefix = "§7[OFFLINE] §f";
     public boolean playSpawnSound = true;
     public String combatMessage = "§c§lIN COMBAT: §f%s s remaining";
-    
     public List<String> blockedCommands = new ArrayList<>();
+
+    // Auth Settings
+    public boolean enableAuth = true;
+    public boolean forceAuthInOfflineMode = true;
+    public int sessionDurationHours = 24; 
+    public boolean hideCoordinatesBeforeAuth = true;
+    public double lobbyX = 0, lobbyY = 1000, lobbyZ = 0; 
+    public String lobbyDimension = "minecraft:overworld";
+    public int authTimeoutSeconds = 60;
 
     public CombatConfig() {
         // Default blocked commands
