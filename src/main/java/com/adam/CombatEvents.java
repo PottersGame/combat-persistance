@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class CombatEvents {
     
-    private static final Set<UUID> pendingJoinDeaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Map<UUID, Long> joinTimes = new ConcurrentHashMap<>();
 
     public static void register(CombatTracker tracker, CombatConfig config) {
@@ -82,19 +81,21 @@ public class CombatEvents {
             
             if (tracker.checkAndClearOfflineDeath(uuid)) {
                 player.getInventory().clearContent();
-                pendingJoinDeaths.add(uuid);
+                Combatpersistence.pendingJoinDeaths.add(uuid);
             }
 
             if (config.enableAuth && (!server.usesAuthentication() || !config.forceAuthInOfflineMode)) {
                 if (Combatpersistence.authManager.checkAutoLogin(player)) {
                     player.sendSystemMessage(Component.literal("§aWelcome back! Auto-logged in via IP."));
                     
-                    // Apply skin during auto-login
                     String skin = Combatpersistence.authManager.getCustomSkin(uuid);
                     SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
                     
                     cleanUpNpc(player, tracker, server);
                 } else {
+                    player.setNoGravity(true);
+                    player.setInvulnerable(true);
+
                     if (config.hideCoordinatesBeforeAuth) {
                         Combatpersistence.authManager.saveLocation(player);
                         ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, Identifier.parse(config.lobbyDimension));
@@ -124,20 +125,18 @@ public class CombatEvents {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             long now = System.currentTimeMillis();
 
-            if (!pendingJoinDeaths.isEmpty()) {
-                Iterator<UUID> iterator = pendingJoinDeaths.iterator();
-                while (iterator.hasNext()) {
-                    UUID uuid = iterator.next();
-                    ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-                    if (player != null) {
-                        player.getInventory().clearContent();
-                        DamageSource generic = player.level().damageSources().generic();
-                        player.setHealth(0.0f);
-                        player.die(generic);
-                        iterator.remove();
-                    }
+            // Refactored to use removeIf to avoid concurrent modification risks
+            Combatpersistence.pendingJoinDeaths.removeIf(uuid -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+                if (player != null) {
+                    player.getInventory().clearContent();
+                    DamageSource generic = player.level().damageSources().generic();
+                    player.setHealth(0.0f);
+                    player.die(generic);
+                    return true;
                 }
-            }
+                return false;
+            });
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 UUID uuid = player.getUUID();

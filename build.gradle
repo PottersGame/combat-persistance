@@ -70,3 +70,35 @@ publishing {
 	repositories {
 	}
 }
+
+task geminiClassDb {
+    doLast {
+        def cp = configurations.compileClasspath.files
+        def cpString = cp.join(File.pathSeparator)
+        def outDir = new File(project.projectDir, '.gemini')
+        if (!outDir.exists()) outDir.mkdirs()
+        
+        new File(outDir, 'classpath.txt').text = cpString
+        
+        def classList = new java.util.TreeSet<String>()
+        cp.each { file ->
+            if (file.name.endsWith('.jar') && file.exists()) {
+                try {
+                    def zip = new java.util.zip.ZipFile(file)
+                    zip.entries().each { entry ->
+                        if (!entry.isDirectory() && entry.name.endsWith('.class')) {
+                            def className = entry.name.replace('/', '.').replace('\\\\', '.').substring(0, entry.name.length() - 6)
+                            classList.add(className)
+                        }
+                    }
+                    zip.close()
+                } catch (Exception e) {
+                    println 'Failed to read ' + file + ': ' + e.message
+                }
+            }
+        }
+        
+        new File(outDir, 'class_db.txt').text = classList.join('\n')
+        println 'Gemini Class DB generated.'
+    }
+}

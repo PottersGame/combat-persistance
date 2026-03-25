@@ -10,6 +10,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class CombatConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -56,10 +57,13 @@ public class CombatConfig {
     }
 
     public static void save(CombatConfig config) {
-        try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
-            GSON.toJson(config, writer);
-        } catch (IOException e) {
-            Combatpersistence.LOGGER.error("Failed to save combat config", e);
-        }
+        // Wrap disk-writing in a background thread to prevent lag spikes
+        CompletableFuture.runAsync(() -> {
+            try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
+                GSON.toJson(config, writer);
+            } catch (IOException e) {
+                Combatpersistence.LOGGER.error("Failed to save combat config in background", e);
+            }
+        });
     }
 }

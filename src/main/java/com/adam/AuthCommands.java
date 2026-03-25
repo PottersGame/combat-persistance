@@ -37,9 +37,8 @@ public class AuthCommands {
 
                     Combatpersistence.authManager.register(player, pwd);
                     player.sendSystemMessage(Component.literal("§aSuccessfully registered and logged in!"));
-                    Combatpersistence.authManager.restoreLocation(player);
                     
-                    // Apply default skin (their own name)
+                    // Apply default skin
                     SkinManager.applySkin(player, player.getName().getString());
                     
                     return 1;
@@ -63,7 +62,6 @@ public class AuthCommands {
 
                     if (Combatpersistence.authManager.login(player, pwd)) {
                         player.sendSystemMessage(Component.literal("§aSuccessfully logged in!"));
-                        Combatpersistence.authManager.restoreLocation(player);
                         
                         // Apply their skin
                         String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());

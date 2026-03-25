@@ -4,6 +4,8 @@ import com.adam.Combatpersistence;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,11 +22,21 @@ public class CombatDeathMixin {
         Combatpersistence.tracker.handleEntityDeath(entity);
     }
 
-    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         if ((Object)this instanceof ServerPlayer player) {
             if (Combatpersistence.config.enableAuth && !Combatpersistence.authManager.isAuthenticated(player)) {
+                // Stop momentum
                 player.setDeltaMovement(0, 0, 0);
+                
+                // Apply Slowness 255 and Mining Fatigue 255 while unauthenticated
+                // Use INFINITE_DURATION to ensure it stays until cleared by AuthManager
+                if (player.level() instanceof ServerLevel serverLevel) {
+                    if (serverLevel.getServer().getTickCount() % 20 == 0) {
+                        player.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, MobEffectInstance.INFINITE_DURATION, 255, false, false));
+                        player.addEffect(new MobEffectInstance(MobEffects.MINING_FATIGUE, MobEffectInstance.INFINITE_DURATION, 255, false, false));
+                    }
+                }
             }
         }
     }

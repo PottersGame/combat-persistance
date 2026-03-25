@@ -16,6 +16,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CombatTracker {
@@ -41,7 +42,6 @@ public class CombatTracker {
             this.inventoryNbt = new ArrayList<>();
             for (ItemStack stack : inventory) {
                 if (!stack.isEmpty()) {
-                    // Use Codec with NbtOps for 26.1
                     ItemStack.CODEC.encodeStart(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), stack)
                         .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to encode item: {}", e))
                         .ifPresent(tag -> this.inventoryNbt.add(tag.toString()));
@@ -119,14 +119,20 @@ public class CombatTracker {
     }
 
     private void saveData() {
-        try (FileWriter writer = new FileWriter(DATA_FILE)) {
-            JsonObject root = new JsonObject();
-            root.add("offlineDeaths", GSON.toJsonTree(offlineDeaths));
-            root.add("activeNPCs", GSON.toJsonTree(activeNPCs));
-            GSON.toJson(root, writer);
-        } catch (IOException e) {
-            Combatpersistence.LOGGER.error("Failed to save combat data", e);
-        }
+        // Prepare data for saving
+        Set<UUID> deathsCopy = new HashSet<>(offlineDeaths);
+        Map<UUID, ActiveNPCData> npcsCopy = new HashMap<>(activeNPCs);
+        
+        CompletableFuture.runAsync(() -> {
+            try (FileWriter writer = new FileWriter(DATA_FILE)) {
+                JsonObject root = new JsonObject();
+                root.add("offlineDeaths", GSON.toJsonTree(deathsCopy));
+                root.add("activeNPCs", GSON.toJsonTree(npcsCopy));
+                GSON.toJson(root, writer);
+            } catch (IOException e) {
+                Combatpersistence.LOGGER.error("Failed to save combat data in background", e);
+            }
+        });
     }
 
     private void loadData() {

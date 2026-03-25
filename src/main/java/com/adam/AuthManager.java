@@ -8,6 +8,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
@@ -19,6 +20,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthManager {
@@ -39,7 +41,7 @@ public class AuthManager {
         public String passwordHash;
         public String lastIp;
         public long lastLoginTime;
-        public String customSkin; // Store skin name
+        public String customSkin;
 
         public UserData(String hash, String ip) {
             this.passwordHash = hash;
@@ -76,6 +78,7 @@ public class AuthManager {
         UserData data = new UserData(hash, getIp(player));
         users.put(player.getUUID(), data);
         authenticatedPlayers.add(player.getUUID());
+        onAuthenticated(player);
         saveUsers();
     }
 
@@ -85,23 +88,11 @@ public class AuthManager {
             data.lastIp = getIp(player);
             data.lastLoginTime = System.currentTimeMillis();
             authenticatedPlayers.add(player.getUUID());
+            onAuthenticated(player);
             saveUsers();
             return true;
         }
         return false;
-    }
-
-    public void setCustomSkin(UUID uuid, String skinName) {
-        UserData data = users.get(uuid);
-        if (data != null) {
-            data.customSkin = skinName;
-            saveUsers();
-        }
-    }
-
-    public String getCustomSkin(UUID uuid) {
-        UserData data = users.get(uuid);
-        return (data != null) ? data.customSkin : null;
     }
 
     public boolean checkAutoLogin(ServerPlayer player) {
@@ -113,9 +104,21 @@ public class AuthManager {
         
         if (currentIp.equals(data.lastIp) && hoursSinceLastLogin < Combatpersistence.config.sessionDurationHours) {
             authenticatedPlayers.add(player.getUUID());
+            onAuthenticated(player);
             return true;
         }
         return false;
+    }
+
+    private void onAuthenticated(ServerPlayer player) {
+        player.setNoGravity(false);
+        player.setInvulnerable(false);
+        
+        // Clear Slowness and Mining Fatigue applied during pre-auth
+        player.removeEffect(MobEffects.SLOWNESS);
+        player.removeEffect(MobEffects.MINING_FATIGUE);
+        
+        restoreLocation(player);
     }
 
     public void logout(ServerPlayer player) {
@@ -129,7 +132,7 @@ public class AuthManager {
         }
     }
 
-    public void restoreLocation(ServerPlayer player) {
+    private void restoreLocation(ServerPlayer player) {
         OriginalLocation loc = preAuthLocations.remove(player.getUUID());
         if (loc != null) {
             saveLocations();
@@ -148,6 +151,19 @@ public class AuthManager {
                 player.teleport(transition);
             }
         }
+    }
+
+    public void setCustomSkin(UUID uuid, String skinName) {
+        UserData data = users.get(uuid);
+        if (data != null) {
+            data.customSkin = skinName;
+            saveUsers();
+        }
+    }
+
+    public String getCustomSkin(UUID uuid) {
+        UserData data = users.get(uuid);
+        return (data != null) ? data.customSkin : null;
     }
 
     private String getIp(ServerPlayer player) {
@@ -169,11 +185,15 @@ public class AuthManager {
     }
 
     private void saveUsers() {
-        try (FileWriter writer = new FileWriter(AUTH_FILE)) {
-            GSON.toJson(users, writer);
-        } catch (IOException e) {
-            Combatpersistence.LOGGER.error("Failed to save auth data", e);
-        }
+        // Wrap disk-writing in a background thread to prevent lag spikes
+        Map<UUID, UserData> copy = new HashMap<>(users);
+        CompletableFuture.runAsync(() -> {
+            try (FileWriter writer = new FileWriter(AUTH_FILE)) {
+                GSON.toJson(copy, writer);
+            } catch (IOException e) {
+                Combatpersistence.LOGGER.error("Failed to save auth data in background", e);
+            }
+        });
     }
 
     private void loadLocations() {
@@ -189,10 +209,14 @@ public class AuthManager {
     }
 
     private void saveLocations() {
-        try (FileWriter writer = new FileWriter(LOC_FILE)) {
-            GSON.toJson(preAuthLocations, writer);
-        } catch (IOException e) {
-            Combatpersistence.LOGGER.error("Failed to save pending locations", e);
-        }
+        // Wrap disk-writing in a background thread to prevent lag spikes
+        Map<UUID, OriginalLocation> copy = new HashMap<>(preAuthLocations);
+        CompletableFuture.runAsync(() -> {
+            try (FileWriter writer = new FileWriter(LOC_FILE)) {
+                GSON.toJson(copy, writer);
+            } catch (IOException e) {
+                Combatpersistence.LOGGER.error("Failed to save pending locations in background", e);
+            }
+        });
     }
 }
