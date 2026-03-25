@@ -49,22 +49,16 @@ public class CombatNPC extends Mannequin {
         if (currentProfile.properties().isEmpty()) {
             String skinName = Combatpersistence.authManager.getCustomSkin(original.getUUID());
             final String finalSkinName = skinName != null ? skinName : playerName;
-            CompletableFuture.runAsync(() -> {
-                try {
-                    var profileOpt = server.services().profileResolver().fetchByName(finalSkinName);
-                    if (profileOpt.isPresent()) {
-                        GameProfile mojangProfile = profileOpt.get();
-                        ProfileResult result = server.services().sessionService().fetchProfile(mojangProfile.id(), true);
-                        if (result != null && result.profile() != null) {
-                            final GameProfile finalProfile = result.profile();
-                            server.execute(() -> {
-                                if (!npc.isRemoved()) {
-                                    npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(finalProfile));
-                                }
-                            });
+            SkinManager.fetchSkin(finalSkinName).thenAccept(skinProperty -> {
+                if (skinProperty != null) {
+                    server.execute(() -> {
+                        if (!npc.isRemoved()) {
+                            GameProfile updatedProfile = new GameProfile(original.getUUID(), playerName);
+                            updatedProfile.properties().put("textures", skinProperty);
+                            npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(updatedProfile));
                         }
-                    }
-                } catch (Exception ignored) {}
+                    });
+                }
             });
         }
 
