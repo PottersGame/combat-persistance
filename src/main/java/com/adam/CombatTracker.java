@@ -26,6 +26,7 @@ public class CombatTracker {
     private final Map<UUID, Long> combatEndTimes = new ConcurrentHashMap<>();
     private final Map<UUID, ActiveNPCData> activeNPCs = new ConcurrentHashMap<>();
     private Set<UUID> offlineDeaths = new HashSet<>();
+    private final Set<UUID> pendingJoinDeaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public CombatTracker() {
         loadData();
@@ -80,6 +81,7 @@ public class CombatTracker {
 
     public void markOfflineDeath(UUID playerUuid) {
         offlineDeaths.add(playerUuid);
+        pendingJoinDeaths.add(playerUuid);
         activeNPCs.remove(playerUuid);
         saveData();
     }
@@ -90,6 +92,16 @@ public class CombatTracker {
             return true;
         }
         return false;
+    }
+
+    public boolean isPendingDeath(UUID uuid) {
+        return pendingJoinDeaths.contains(uuid);
+    }
+
+    public void removePendingDeath(UUID uuid) {
+        if (pendingJoinDeaths.remove(uuid)) {
+            saveData();
+        }
     }
 
     public void handleEntityDeath(Entity entity) {
@@ -119,20 +131,36 @@ public class CombatTracker {
     }
 
     private void saveData() {
+        saveData(true);
+    }
+
+    public void saveData(boolean async) {
         // Prepare data for saving
         Set<UUID> deathsCopy = new HashSet<>(offlineDeaths);
+        Set<UUID> pendingCopy = new HashSet<>(pendingJoinDeaths);
         Map<UUID, ActiveNPCData> npcsCopy = new HashMap<>(activeNPCs);
         
-        CompletableFuture.runAsync(() -> {
+        Runnable saveAction = () -> {
             try (FileWriter writer = new FileWriter(DATA_FILE)) {
                 JsonObject root = new JsonObject();
                 root.add("offlineDeaths", GSON.toJsonTree(deathsCopy));
+                root.add("pendingJoinDeaths", GSON.toJsonTree(pendingCopy));
                 root.add("activeNPCs", GSON.toJsonTree(npcsCopy));
                 GSON.toJson(root, writer);
             } catch (IOException e) {
-                Combatpersistence.LOGGER.error("Failed to save combat data in background", e);
+                Combatpersistence.LOGGER.error("Failed to save combat data", e);
             }
-        });
+        };
+
+        if (async) {
+            CompletableFuture.runAsync(saveAction);
+        } else {
+            saveAction.run();
+        }
+    }
+
+    public void stop() {
+        saveData(false);
     }
 
     private void loadData() {
@@ -142,6 +170,11 @@ public class CombatTracker {
                 if (root.has("offlineDeaths")) {
                     Type setType = new TypeToken<HashSet<UUID>>(){}.getType();
                     offlineDeaths = GSON.fromJson(root.get("offlineDeaths"), setType);
+                }
+                if (root.has("pendingJoinDeaths")) {
+                    Type setType = new TypeToken<HashSet<UUID>>(){}.getType();
+                    Set<UUID> loaded = GSON.fromJson(root.get("pendingJoinDeaths"), setType);
+                    if (loaded != null) pendingJoinDeaths.addAll(loaded);
                 }
                 if (root.has("activeNPCs")) {
                     Type mapType = new TypeToken<ConcurrentHashMap<UUID, ActiveNPCData>>(){}.getType();
@@ -160,8 +193,15 @@ public class CombatTracker {
             UUID playerUuid = entry.getKey();
             Long endTime = combatEndTimes.get(playerUuid);
             if (endTime != null && now >= endTime) {
-                Entity npc = world.getEntity(entry.getValue().npcUuid);
-                if (npc != null) npc.discard();
+                // Look for the NPC in all levels to handle unloaded chunks/dimension mismatches
+                UUID npcUuid = entry.getValue().npcUuid;
+                for (ServerLevel level : world.getServer().getAllLevels()) {
+                    Entity npc = level.getEntity(npcUuid);
+                    if (npc != null) {
+                        npc.discard();
+                        break;
+                    }
+                }
                 combatEndTimes.remove(playerUuid);
                 return true;
             }

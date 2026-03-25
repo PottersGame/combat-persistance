@@ -70,6 +70,7 @@ public class AuthManager {
     }
 
     public boolean isAuthenticated(ServerPlayer player) {
+        if (!Combatpersistence.config.enableAuth) return true;
         return authenticatedPlayers.contains(player.getUUID());
     }
 

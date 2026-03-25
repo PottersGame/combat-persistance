@@ -22,7 +22,7 @@ public class CombatPickupMixin {
             }
             
             // Block pickup if marked for pending death
-            if (Combatpersistence.pendingJoinDeaths.contains(sp.getUUID())) {
+            if (Combatpersistence.tracker.isPendingDeath(sp.getUUID())) {
                 ci.cancel();
             }
         }

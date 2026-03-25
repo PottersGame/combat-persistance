@@ -3,6 +3,9 @@ package com.adam;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -61,6 +64,33 @@ public class CombatEvents {
             return InteractionResult.PASS;
         });
 
+        UseItemCallback.EVENT.register((player, world, hand) -> {
+            if (player instanceof ServerPlayer sp) {
+                if (!Combatpersistence.authManager.isAuthenticated(sp)) {
+                    return InteractionResult.FAIL;
+                }
+            }
+            return InteractionResult.PASS;
+        });
+
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (player instanceof ServerPlayer sp) {
+                if (!Combatpersistence.authManager.isAuthenticated(sp)) {
+                    return InteractionResult.FAIL;
+                }
+            }
+            return InteractionResult.PASS;
+        });
+
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
+            if (player instanceof ServerPlayer sp) {
+                if (!Combatpersistence.authManager.isAuthenticated(sp)) {
+                    return InteractionResult.FAIL;
+                }
+            }
+            return InteractionResult.PASS;
+        });
+
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer player = handler.getPlayer();
             UUID uuid = player.getUUID();
@@ -84,7 +114,7 @@ public class CombatEvents {
             boolean wasOfflineKilled = tracker.checkAndClearOfflineDeath(uuid);
             if (wasOfflineKilled) {
                 player.getInventory().clearContent();
-                Combatpersistence.pendingJoinDeaths.add(uuid);
+                // tracker.markOfflineDeath already adds to tracker's pending deaths
             }
 
             if (config.enableAuth && (!server.usesAuthentication() || !config.forceAuthInOfflineMode)) {
@@ -127,6 +157,12 @@ public class CombatEvents {
                 cleanUpNpc(player, tracker, server);
                 // If no auth, handle pending death immediately
                 handlePendingDeath(player);
+
+                // If this is an offline server, apply the skin (online servers do this automatically)
+                if (!server.usesAuthentication()) {
+                    String skin = Combatpersistence.authManager.getCustomSkin(uuid);
+                    SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
+                }
             }
         });
 
@@ -176,10 +212,11 @@ public class CombatEvents {
     }
 
     public static void handlePendingDeath(ServerPlayer player) {
-        if (Combatpersistence.pendingJoinDeaths.remove(player.getUUID())) {
+        if (Combatpersistence.tracker.isPendingDeath(player.getUUID())) {
             player.getInventory().clearContent();
             player.setHealth(0.0f);
             player.die(player.level().damageSources().generic());
+            Combatpersistence.tracker.removePendingDeath(player.getUUID());
         }
     }
 

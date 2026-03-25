@@ -1,6 +1,7 @@
 package com.adam;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,9 +18,6 @@ public class Combatpersistence implements ModInitializer {
     public static final CombatTracker tracker = new CombatTracker();
     public static final AuthManager authManager = new AuthManager();
     
-    // Globally accessible set of players waiting to be killed on rejoin
-    public static final Set<UUID> pendingJoinDeaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing Combat Persistence Mod...");
@@ -29,6 +27,11 @@ public class Combatpersistence implements ModInitializer {
         CombatEvents.register(tracker, config);
         AuthCommands.register();
         
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            LOGGER.info("Saving combat data synchronously for server shutdown...");
+            tracker.stop();
+        });
+
         LOGGER.info("Combat tag duration is set to {} seconds.", config.combatTagDurationSeconds);
     }
 }

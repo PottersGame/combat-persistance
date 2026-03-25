@@ -1,5 +1,6 @@
 package com.adam;
 
+import com.google.common.collect.HashMultimap;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
@@ -56,21 +57,24 @@ public class CombatNPC extends Mannequin {
                     server.execute(() -> {
                         if (!npc.isRemoved()) {
                             // Get the existing GameProfile properties from the original player
-                            PropertyMap existingProperties = original.getGameProfile().getProperties();
+                            PropertyMap existingProperties = original.getGameProfile().properties();
                             
-                            // Create a new mutable PropertyMap
-                            PropertyMap mutableProperties = new PropertyMap();
+                            // Create a new mutable Multimap
+                            com.google.common.collect.Multimap<String, Property> properties = HashMultimap.create();
                             
-                            // Copy existing properties to the new mutable map
+                            // Copy existing properties to the new mutable multimap
                             for (Map.Entry<String, Property> entry : existingProperties.entries()) {
-                                mutableProperties.put(entry.getKey(), entry.getValue());
+                                properties.put(entry.getKey(), entry.getValue());
                             }
                             
                             // Add the new skin property
-                            mutableProperties.put("textures", skinProperty);
+                            properties.put("textures", skinProperty);
+                            
+                            // Wrap in a new PropertyMap
+                            PropertyMap updatedProperties = new PropertyMap(properties);
                             
                             // Create a new GameProfile with the updated properties
-                            GameProfile updatedProfile = new GameProfile(original.getUUID(), playerName, mutableProperties);
+                            GameProfile updatedProfile = new GameProfile(original.getUUID(), playerName, updatedProperties);
                             
                             // Set the ResolvableProfile component for the NPC
                             npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(updatedProfile));

@@ -9,9 +9,27 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 
 @Mixin(ServerGamePacketListenerImpl.class)
 public class CombatCommandMixin {
+
+    @Inject(method = "handleContainerClick", at = @At("HEAD"), cancellable = true)
+    private void onHandleContainerClick(ServerboundContainerClickPacket packet, CallbackInfo ci) {
+        ServerGamePacketListenerImpl handler = (ServerGamePacketListenerImpl) (Object) this;
+        if (Combatpersistence.config.enableAuth && !Combatpersistence.authManager.isAuthenticated(handler.player)) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "handlePlayerAction", at = @At("HEAD"), cancellable = true)
+    private void onHandlePlayerAction(ServerboundPlayerActionPacket packet, CallbackInfo ci) {
+        ServerGamePacketListenerImpl handler = (ServerGamePacketListenerImpl) (Object) this;
+        if (Combatpersistence.config.enableAuth && !Combatpersistence.authManager.isAuthenticated(handler.player)) {
+            ci.cancel();
+        }
+    }
 
     @Inject(method = "handleChatCommand", at = @At("HEAD"), cancellable = true)
     private void onHandleChatCommand(ServerboundChatCommandPacket packet, CallbackInfo ci) {
