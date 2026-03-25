@@ -23,12 +23,14 @@ import java.util.concurrent.CompletableFuture;
 public class CombatNPC extends Mannequin {
 
     public final UUID originalPlayerUuid;
+    private final String originalPlayerName;
     private final List<ItemStack> extraInventory = new ArrayList<>();
     private boolean hasDropped = false;
 
-    public CombatNPC(ServerLevel world, UUID originalPlayerUuid) {
+    public CombatNPC(ServerLevel world, UUID originalPlayerUuid, String originalPlayerName) {
         super(EntityType.MANNEQUIN, world);
         this.originalPlayerUuid = originalPlayerUuid;
+        this.originalPlayerName = originalPlayerName;
     }
 
     public static CombatNPC spawn(ServerPlayer original) {
@@ -36,20 +38,17 @@ public class CombatNPC extends Mannequin {
         MinecraftServer server = world.getServer();
         CombatConfig config = Combatpersistence.config;
 
-        CombatNPC npc = new CombatNPC(world, original.getUUID());
+        String playerName = original.getName().getString();
+        CombatNPC npc = new CombatNPC(world, original.getUUID(), playerName);
 
-        // Use current player's profile (it already has properties if they are logged in)
+        // Visual setup
         GameProfile currentProfile = original.getGameProfile();
         npc.setComponent(DataComponents.PROFILE, ResolvableProfile.createResolved(currentProfile));
 
-        String playerName = original.getName().getString();
-        
-        // Optional: Ensure skin is the latest from Mojang if it's missing
+        // Async skin resolution for offline mode
         if (currentProfile.properties().isEmpty()) {
             String skinName = Combatpersistence.authManager.getCustomSkin(original.getUUID());
-            if (skinName == null) skinName = playerName;
-            
-            final String finalSkinName = skinName;
+            final String finalSkinName = skinName != null ? skinName : playerName;
             CompletableFuture.runAsync(() -> {
                 try {
                     var profileOpt = server.services().profileResolver().fetchByName(finalSkinName);
@@ -65,34 +64,29 @@ public class CombatNPC extends Mannequin {
                             });
                         }
                     }
-                } catch (Exception e) {
-                    Combatpersistence.LOGGER.error("Failed to resolve skin for NPC: {}", finalSkinName);
-                }
+                } catch (Exception ignored) {}
             });
         }
 
-        // Visuals
         npc.setCustomName(Component.literal(config.npcNamePrefix + playerName));
         npc.setCustomNameVisible(true);
 
-        // Position & Rotation
+        // Position and Attributes
         npc.setPos(original.getX(), original.getY(), original.getZ());
         npc.setYRot(original.getYRot());
         npc.setXRot(original.getXRot());
         npc.setYHeadRot(original.getYHeadRot());
         npc.yBodyRot = original.yBodyRot;
-
-        // Attributes & Health
         npc.getAttributes().assignAllValues(original.getAttributes());
         npc.setHealth(original.getHealth());
         npc.setAbsorptionAmount(original.getAbsorptionAmount());
         
-        // Copy Equipment
+        // Copy Equipment (Visual only)
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             npc.setItemSlot(slot, original.getItemBySlot(slot).copy());
         }
 
-        // Store Full Inventory
+        // Store Full Inventory for drop-on-death
         for (int i = 0; i < original.getInventory().getContainerSize(); i++) {
             ItemStack stack = original.getInventory().getItem(i);
             if (!stack.isEmpty()) {
@@ -112,11 +106,27 @@ public class CombatNPC extends Mannequin {
     }
 
     @Override
+    public boolean canUsePortal(boolean allowVehicles) {
+        return false; // Prevent pushing NPCs into portals to evade trackers
+    }
+
+    @Override
     public void die(DamageSource damageSource) {
         if (!hasDropped) {
             dropExtraInventory();
             Combatpersistence.tracker.markOfflineDeath(this.originalPlayerUuid);
             Combatpersistence.tracker.removeNPC(this.originalPlayerUuid);
+            
+            // Fix A: Clear equipment so vanilla logic doesn't drop it (preventing armor dupe)
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
+                this.setItemSlot(slot, ItemStack.EMPTY);
+            }
+            
+            // Fix B: Broadcast the kill
+            if (this.level() instanceof ServerLevel world) {
+                Component deathMsg = Component.literal("§c[PvP] §7" + this.originalPlayerName + " combat logged and was slain!");
+                world.getServer().getPlayerList().broadcastSystemMessage(deathMsg, false);
+            }
             hasDropped = true;
         }
         super.die(damageSource);

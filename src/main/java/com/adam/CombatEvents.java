@@ -30,22 +30,24 @@ public class CombatEvents {
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
             if (entity instanceof ServerPlayer victim) {
                 if (!Combatpersistence.authManager.isAuthenticated(victim)) return false;
-                if (source.getEntity() instanceof ServerPlayer attacker && !Combatpersistence.authManager.isAuthenticated(attacker)) return false;
 
-                if (source.getEntity() instanceof ServerPlayer attacker) {
+                Entity attackerEntity = source.getEntity();
+                
+                if (attackerEntity instanceof ServerPlayer attacker && Combatpersistence.authManager.isAuthenticated(attacker)) {
                     if (victim != attacker && !victim.getAbilities().instabuild && !attacker.getAbilities().instabuild) {
                         tracker.tag(victim, config.combatTagDurationSeconds);
                         tracker.tag(attacker, config.combatTagDurationSeconds);
                     }
                 }
             }
-            if (entity instanceof CombatNPC victimNpc && source.getEntity() instanceof ServerPlayer attacker) {
-                if (Combatpersistence.authManager.isAuthenticated(attacker)) {
+            if (entity instanceof CombatNPC victimNpc) {
+                Entity attackerEntity = source.getEntity();
+                if (attackerEntity instanceof ServerPlayer attacker && Combatpersistence.authManager.isAuthenticated(attacker)) {
                     if (!attacker.getAbilities().instabuild) {
                         tracker.tag(attacker, config.combatTagDurationSeconds);
                     }
-                } else {
-                    return false;
+                } else if (attackerEntity instanceof ServerPlayer) {
+                    return false; 
                 }
             }
             return true; 
@@ -88,6 +90,9 @@ public class CombatEvents {
                 if (Combatpersistence.authManager.checkAutoLogin(player)) {
                     player.sendSystemMessage(Component.literal("§aWelcome back! Auto-logged in via IP."));
                     
+                    // Successful Auto-login
+                    Combatpersistence.authManager.onAuthenticated(player);
+                    
                     String skin = Combatpersistence.authManager.getCustomSkin(uuid);
                     SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
                     
@@ -125,7 +130,6 @@ public class CombatEvents {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             long now = System.currentTimeMillis();
 
-            // Refactored to use removeIf to avoid concurrent modification risks
             Combatpersistence.pendingJoinDeaths.removeIf(uuid -> {
                 ServerPlayer player = server.getPlayerList().getPlayer(uuid);
                 if (player != null) {

@@ -78,7 +78,6 @@ public class AuthManager {
         UserData data = new UserData(hash, getIp(player));
         users.put(player.getUUID(), data);
         authenticatedPlayers.add(player.getUUID());
-        onAuthenticated(player);
         saveUsers();
     }
 
@@ -88,7 +87,6 @@ public class AuthManager {
             data.lastIp = getIp(player);
             data.lastLoginTime = System.currentTimeMillis();
             authenticatedPlayers.add(player.getUUID());
-            onAuthenticated(player);
             saveUsers();
             return true;
         }
@@ -104,20 +102,17 @@ public class AuthManager {
         
         if (currentIp.equals(data.lastIp) && hoursSinceLastLogin < Combatpersistence.config.sessionDurationHours) {
             authenticatedPlayers.add(player.getUUID());
-            onAuthenticated(player);
             return true;
         }
         return false;
     }
 
-    private void onAuthenticated(ServerPlayer player) {
+    // This MUST be called on the Server Main Thread
+    public void onAuthenticated(ServerPlayer player) {
         player.setNoGravity(false);
         player.setInvulnerable(false);
-        
-        // Clear Slowness and Mining Fatigue applied during pre-auth
         player.removeEffect(MobEffects.SLOWNESS);
         player.removeEffect(MobEffects.MINING_FATIGUE);
-        
         restoreLocation(player);
     }
 
@@ -185,7 +180,6 @@ public class AuthManager {
     }
 
     private void saveUsers() {
-        // Wrap disk-writing in a background thread to prevent lag spikes
         Map<UUID, UserData> copy = new HashMap<>(users);
         CompletableFuture.runAsync(() -> {
             try (FileWriter writer = new FileWriter(AUTH_FILE)) {
@@ -209,7 +203,6 @@ public class AuthManager {
     }
 
     private void saveLocations() {
-        // Wrap disk-writing in a background thread to prevent lag spikes
         Map<UUID, OriginalLocation> copy = new HashMap<>(preAuthLocations);
         CompletableFuture.runAsync(() -> {
             try (FileWriter writer = new FileWriter(LOC_FILE)) {
