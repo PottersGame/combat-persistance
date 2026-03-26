@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "com.pottersgame.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"CombatCommandMixin",
+		"CombatDeathMixin",
+		"CombatPickupMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

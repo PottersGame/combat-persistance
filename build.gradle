@@ -1,0 +1,117 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+	id 'com.modrinth.minotaur' version '2.+'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
+
+loom {
+	mods {
+		"combatpersistence" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    
+    // BCrypt for secure password hashing
+    implementation "org.mindrot:jbcrypt:0.4"
+    include "org.mindrot:jbcrypt:0.4"
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": inputs.properties.version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	inputs.property "archivesName", project.base.archivesName
+
+	from("LICENSE") {
+		rename { "${it}_${inputs.properties.archivesName}"}
+	}
+}
+
+modrinth {
+	token = System.getenv("MODRINTH_TOKEN")
+	projectId = "combat-persistence" // PLEASE REPLACE THIS WITH YOUR ACTUAL PROJECT ID/SLUG
+	versionNumber = project.version
+	versionType = "release"
+	gameVersions = [project.minecraft_version]
+	loaders = ["fabric"]
+	dependencies {
+		required.project "fabric-api"
+	}
+}
+
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			artifactId = project.archives_base_name
+			from components.java
+		}
+	}
+
+	repositories {
+	}
+}
+
+task geminiClassDb {
+    doLast {
+        def cp = configurations.compileClasspath.files
+        def cpString = cp.join(File.pathSeparator)
+        def outDir = new File(project.projectDir, '.gemini')
+        if (!outDir.exists()) outDir.mkdirs()
+        
+        new File(outDir, 'classpath.txt').text = cpString
+        
+        def classList = new java.util.TreeSet<String>()
+        cp.each { file ->
+            if (file.name.endsWith('.jar') && file.exists()) {
+                try {
+                    def zip = new java.util.zip.ZipFile(file)
+                    zip.entries().each { entry ->
+                        if (!entry.isDirectory() && entry.name.endsWith('.class')) {
+                            def className = entry.name.replace('/', '.').replace('\\\\', '.').substring(0, entry.name.length() - 6)
+                            classList.add(className)
+                        }
+                    }
+                    zip.close()
+                } catch (Exception e) {
+                    println 'Failed to read ' + file + ': ' + e.message
+                }
+            }
+        }
+        
+        new File(outDir, 'class_db.txt').text = classList.join('\n')
+        println 'Gemini Class DB generated.'
+    }
+}
