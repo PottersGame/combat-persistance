@@ -82,6 +82,14 @@ public class CombatTracker {
         saveData();
     }
 
+    public ActiveNPCData getAndRemoveNPCData(UUID playerUuid) {
+        ActiveNPCData data = activeNPCs.remove(playerUuid);
+        if (data != null) {
+            saveData();
+        }
+        return data;
+    }
+
     public void markOfflineDeath(UUID playerUuid) {
         offlineDeaths.add(playerUuid);
         pendingJoinDeaths.add(playerUuid);
@@ -223,24 +231,52 @@ public class CombatTracker {
 
     public void tick(ServerLevel world) {
         long now = System.currentTimeMillis();
-        activeNPCs.entrySet().removeIf(entry -> {
-            UUID playerUuid = entry.getKey();
-            Long endTime = combatEndTimes.get(playerUuid);
-            if (endTime != null && now >= endTime) {
-                // Look for the NPC in all levels to handle unloaded chunks/dimension mismatches
-                UUID npcUuid = entry.getValue().npcUuid;
-                for (ServerLevel level : world.getServer().getAllLevels()) {
-                    Entity npc = level.getEntity(npcUuid);
-                    if (npc != null) {
-                        npc.discard();
-                        break;
+
+        // We iterate over combatEndTimes to see what has expired
+        for (Iterator<Map.Entry<UUID, Long>> it = combatEndTimes.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<UUID, Long> entry = it.next();
+            if (now >= entry.getValue()) {
+                UUID playerUuid = entry.getKey();
+                ActiveNPCData npcData = activeNPCs.get(playerUuid);
+                if (npcData != null) {
+                    // Discard the NPC entity if it exists
+                    for (ServerLevel level : world.getServer().getAllLevels()) {
+                        Entity npc = level.getEntity(npcData.npcUuid);
+                        if (npc != null) {
+                            npc.discard();
+                            break;
+                        }
                     }
+                    // Note: We DO NOT remove from activeNPCs here! 
+                    // We want the inventory to persist until the player rejoins.
                 }
-                combatEndTimes.remove(playerUuid);
-                return true;
+                it.remove(); // Remove from combatEndTimes
             }
-            return false;
-        });
-        combatEndTimes.entrySet().removeIf(entry -> now >= entry.getValue() && !activeNPCs.containsKey(entry.getKey()));
+        }
     }
-}
+
+    public void restoreInventory(ServerPlayer player) {
+        ActiveNPCData data = activeNPCs.remove(player.getUUID());
+        if (data == null) return;
+
+        saveData();
+
+        if (player.level() instanceof ServerLevel world) {
+            for (String nbtStr : data.inventoryNbt) {
+                try {
+                    CompoundTag tag = net.minecraft.nbt.TagParser.parseCompoundFully(nbtStr);
+                    ItemStack.CODEC.parse(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), tag)
+                        .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to decode restored item: {}", e))
+                        .ifPresent(stack -> {
+                             if (!player.getInventory().add(stack)) {
+                                 player.drop(stack, false);
+                             }
+                        });
+                } catch (Exception e) {
+                    Combatpersistence.LOGGER.error("Failed to parse restored inventory item string", e);
+                }
+            }
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§aYour inventory has been restored."));
+        }
+    }
+    }

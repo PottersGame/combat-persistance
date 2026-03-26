@@ -142,6 +142,9 @@ public class AuthManager {
         // Ensure pending deaths are handled BEFORE restoring location
         CombatEvents.handlePendingDeath(player);
         
+        // Clean up any remaining NPC and restore inventory
+        CombatEvents.cleanUpNpc(player, Combatpersistence.tracker, ((ServerLevel) player.level()).getServer());
+        
         restoreLocation(player);
     }
 

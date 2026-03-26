@@ -22,6 +22,7 @@ import net.minecraft.world.phys.Vec3;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +49,7 @@ public class SkinManager {
                 
                 // 1. If identifier is a name, we must get the UUID first
                 if (identifier.length() <= 16) {
-                    URL nameUrl = new URL("https://api.mojang.com/users/profiles/minecraft/" + identifier);
+                    URL nameUrl = URI.create("https://api.mojang.com/users/profiles/minecraft/" + identifier).toURL();
                     HttpURLConnection nameConn = (HttpURLConnection) nameUrl.openConnection();
                     if (nameConn.getResponseCode() == 200) {
                         JsonObject nameResp = JsonParser.parseReader(new InputStreamReader(nameConn.getInputStream())).getAsJsonObject();
@@ -59,7 +60,7 @@ public class SkinManager {
                 }
 
                 // 2. Fetch the signed profile from Mojang sessionserver
-                URL url = new URL("https://sessionserver.mojang.com/session/minecraft/profile/" + uuid + "?unsigned=false");
+                URL url = URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + uuid + "?unsigned=false").toURL();
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(5000);

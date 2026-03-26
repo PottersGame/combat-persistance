@@ -138,8 +138,6 @@ public class CombatEvents {
                     
                     String skin = Combatpersistence.authManager.getCustomSkin(uuid);
                     SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
-                    
-                    cleanUpNpc(player, tracker, server);
                 } else {
                     player.setNoGravity(true);
                     player.setInvulnerable(true);
@@ -232,7 +230,8 @@ public class CombatEvents {
         }
     }
 
-    private static void cleanUpNpc(ServerPlayer player, CombatTracker tracker, net.minecraft.server.MinecraftServer server) {
+    public static void cleanUpNpc(ServerPlayer player, CombatTracker tracker, net.minecraft.server.MinecraftServer server) {
+        // Discard entity if it exists
         UUID npcUuid = tracker.getNPCForPlayer(player.getUUID());
         if (npcUuid != null) {
             for (ServerLevel level : server.getAllLevels()) {
@@ -242,7 +241,8 @@ public class CombatEvents {
                     break;
                 }
             }
-            tracker.removeNPC(player.getUUID());
         }
+        // Restore inventory from tracker (handles removing entry)
+        tracker.restoreInventory(player);
     }
 }
