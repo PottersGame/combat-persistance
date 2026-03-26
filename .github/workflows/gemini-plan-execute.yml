@@ -20,6 +20,7 @@ jobs:
   plan-execute:
     timeout-minutes: 30
     runs-on: 'ubuntu-latest'
+    if: ${{ secrets.GEMINI_API_KEY != '' || secrets.GOOGLE_API_KEY != '' || vars.GCP_WIF_PROVIDER != '' }}
     permissions:
       contents: 'write'
       id-token: 'write'
