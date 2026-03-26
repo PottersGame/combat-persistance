@@ -165,7 +165,9 @@ public class CombatNPC extends Mannequin {
         if (!hasDropped) {
             // Broadcast the kill
             if (this.level() instanceof ServerLevel world) {
-                Component deathMsg = Component.literal("§c[PvP] §7" + this.originalPlayerName + " combat logged and was slain!");
+                CombatConfig config = Combatpersistence.config;
+                String msg = String.format(config.npcDeathBroadcast, this.originalPlayerName);
+                Component deathMsg = Component.literal(msg);
                 world.getServer().getPlayerList().broadcastSystemMessage(deathMsg, false);
             }
 

@@ -40,7 +40,7 @@ public class CombatCommandMixin {
         if (!authenticated) {
             String command = packet.command().toLowerCase();
             if (!command.startsWith("login") && !command.startsWith("register")) {
-                handler.player.sendSystemMessage(Component.literal("§cYou must log in to use commands!"));
+                handler.player.sendSystemMessage(Component.literal(Combatpersistence.config.authRequiredForCommand));
                 ci.cancel();
                 return;
             }
@@ -64,7 +64,7 @@ public class CombatCommandMixin {
     private void onHandleChat(ServerboundChatPacket packet, CallbackInfo ci) {
         ServerGamePacketListenerImpl handler = (ServerGamePacketListenerImpl) (Object) this;
         if (!Combatpersistence.authManager.isAuthenticated(handler.player)) {
-            handler.player.sendSystemMessage(Component.literal("§cYou must log in to chat!"));
+            handler.player.sendSystemMessage(Component.literal(Combatpersistence.config.authRequiredForChat));
             ci.cancel();
         }
     }

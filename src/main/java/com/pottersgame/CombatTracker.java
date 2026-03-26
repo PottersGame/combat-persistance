@@ -4,16 +4,15 @@ import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -38,7 +37,7 @@ public class CombatTracker {
     public static class ActiveNPCData {
         public UUID playerUuid;
         public UUID npcUuid;
-        public List<String> inventoryNbt; 
+        public List<String> inventoryNbt; // Base64 encoded NBT
 
         public ActiveNPCData(UUID playerUuid, UUID npcUuid, List<ItemStack> inventory, ServerLevel world) {
             this.playerUuid = playerUuid;
@@ -46,9 +45,16 @@ public class CombatTracker {
             this.inventoryNbt = new ArrayList<>();
             for (ItemStack stack : inventory) {
                 if (!stack.isEmpty()) {
-                    ItemStack.CODEC.encodeStart(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), stack)
-                        .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to encode item: {}", e))
-                        .ifPresent(tag -> this.inventoryNbt.add(tag.toString()));
+                    try {
+                        CompoundTag tag = (CompoundTag) ItemStack.CODEC.encodeStart(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), stack)
+                            .getOrThrow(e -> new RuntimeException("Failed to encode item: " + e));
+                        
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        NbtIo.writeCompressed(tag, baos);
+                        this.inventoryNbt.add(Base64.getEncoder().encodeToString(baos.toByteArray()));
+                    } catch (Exception e) {
+                        Combatpersistence.LOGGER.error("Failed to encode item to Base64 NBT", e);
+                    }
                 }
             }
         }
@@ -118,7 +124,6 @@ public class CombatTracker {
     public void handleEntityDeath(Entity entity) {
         UUID entityUuid = entity.getUUID();
         
-        // 1. Check if it's a CombatNPC with its own stored inventory (BEST persistence)
         if (entity instanceof CombatNPC npc) {
             List<ItemStack> inventory = npc.getStoredInventory();
             if (!inventory.isEmpty()) {
@@ -126,7 +131,6 @@ public class CombatTracker {
                     entity.spawnAtLocation((ServerLevel) entity.level(), stack);
                 }
             } else {
-                // Fallback to memory cache only if NPC's NBT was empty for some reason
                 for (ActiveNPCData data : activeNPCs.values()) {
                     if (data.npcUuid.equals(entityUuid)) {
                         dropNpcInventory(entity, data);
@@ -141,7 +145,6 @@ public class CombatTracker {
             return;
         }
 
-        // 2. Generic fallback for non-CombatNPC entities (shouldn't happen for our NPCs anymore)
         for (ActiveNPCData data : activeNPCs.values()) {
             if (data.npcUuid.equals(entityUuid)) {
                 dropNpcInventory(entity, data);
@@ -153,17 +156,17 @@ public class CombatTracker {
 
     private void dropNpcInventory(Entity entity, ActiveNPCData data) {
         if (entity.level() instanceof ServerLevel world) {
-            for (String nbtStr : data.inventoryNbt) {
+            for (String b64 : data.inventoryNbt) {
                 try {
-                    CompoundTag tag = net.minecraft.nbt.TagParser.parseCompoundFully(nbtStr);
+                    byte[] bytes = Base64.getDecoder().decode(b64);
+                    CompoundTag tag = NbtIo.readCompressed(new ByteArrayInputStream(bytes), NbtAccounter.unlimitedHeap());
                     ItemStack.CODEC.parse(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), tag)
                         .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to decode item: {}", e))
                         .ifPresent(stack -> {
-                             // Use spawnAtLocation for safety
                              entity.spawnAtLocation(world, stack);
                         });
                 } catch (Exception e) {
-                    Combatpersistence.LOGGER.error("Failed to parse NPC inventory item string", e);
+                    Combatpersistence.LOGGER.error("Failed to parse NPC inventory item from Base64", e);
                 }
             }
         }
@@ -174,7 +177,6 @@ public class CombatTracker {
     }
 
     public void saveData(boolean async) {
-        // Prepare data for saving
         Set<UUID> deathsCopy = new HashSet<>(offlineDeaths);
         Set<UUID> pendingCopy = new HashSet<>(pendingJoinDeaths);
         Map<UUID, ActiveNPCData> npcsCopy = new HashMap<>(activeNPCs);
@@ -232,14 +234,12 @@ public class CombatTracker {
     public void tick(ServerLevel world) {
         long now = System.currentTimeMillis();
 
-        // We iterate over combatEndTimes to see what has expired
         for (Iterator<Map.Entry<UUID, Long>> it = combatEndTimes.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<UUID, Long> entry = it.next();
             if (now >= entry.getValue()) {
                 UUID playerUuid = entry.getKey();
                 ActiveNPCData npcData = activeNPCs.get(playerUuid);
                 if (npcData != null) {
-                    // Discard the NPC entity if it exists
                     for (ServerLevel level : world.getServer().getAllLevels()) {
                         Entity npc = level.getEntity(npcData.npcUuid);
                         if (npc != null) {
@@ -247,10 +247,8 @@ public class CombatTracker {
                             break;
                         }
                     }
-                    // Note: We DO NOT remove from activeNPCs here! 
-                    // We want the inventory to persist until the player rejoins.
                 }
-                it.remove(); // Remove from combatEndTimes
+                it.remove();
             }
         }
     }
@@ -262,9 +260,10 @@ public class CombatTracker {
         saveData();
 
         if (player.level() instanceof ServerLevel world) {
-            for (String nbtStr : data.inventoryNbt) {
+            for (String b64 : data.inventoryNbt) {
                 try {
-                    CompoundTag tag = net.minecraft.nbt.TagParser.parseCompoundFully(nbtStr);
+                    byte[] bytes = Base64.getDecoder().decode(b64);
+                    CompoundTag tag = NbtIo.readCompressed(new ByteArrayInputStream(bytes), NbtAccounter.unlimitedHeap());
                     ItemStack.CODEC.parse(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), tag)
                         .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to decode restored item: {}", e))
                         .ifPresent(stack -> {
@@ -273,10 +272,10 @@ public class CombatTracker {
                              }
                         });
                 } catch (Exception e) {
-                    Combatpersistence.LOGGER.error("Failed to parse restored inventory item string", e);
+                    Combatpersistence.LOGGER.error("Failed to parse restored inventory item from Base64", e);
                 }
             }
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§aYour inventory has been restored."));
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(Combatpersistence.config.inventoryRestoredMessage));
         }
     }
-    }
+}

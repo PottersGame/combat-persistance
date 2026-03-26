@@ -158,9 +158,9 @@ public class CombatEvents {
                     }
                     
                     if (Combatpersistence.authManager.isRegistered(uuid)) {
-                        player.sendSystemMessage(Component.literal("§6Please log in using /login <password>"));
+                        player.sendSystemMessage(Component.literal(config.loginPrompt));
                     } else {
-                        player.sendSystemMessage(Component.literal("§6Please register using /register <password> <confirmPassword>"));
+                        player.sendSystemMessage(Component.literal(config.registerPrompt));
                     }
                 }
             } else {
@@ -186,15 +186,15 @@ public class CombatEvents {
                 if (config.enableAuth && !authenticated) {
                     Long joinTime = joinTimes.get(uuid);
                     if (joinTime != null && (now - joinTime) > (config.authTimeoutSeconds * 1000L)) {
-                        player.connection.disconnect(Component.literal("Login timeout!"));
+                        player.connection.disconnect(Component.literal(config.loginTimeoutMessage));
                         continue;
                     }
 
                     if (server.getTickCount() % 100 == 0) {
                         if (Combatpersistence.authManager.isRegistered(uuid)) {
-                            player.sendSystemMessage(Component.literal("§c§lAUTH: §fUse /login <password>"), true);
+                            player.sendSystemMessage(Component.literal(config.loginPrompt), true);
                         } else {
-                            player.sendSystemMessage(Component.literal("§c§lAUTH: §fUse /register <pwd> <pwd>"), true);
+                            player.sendSystemMessage(Component.literal(config.registerPrompt), true);
                         }
                     }
                 }

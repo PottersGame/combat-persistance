@@ -22,15 +22,15 @@ public class AuthCommands {
                     String confirm = StringArgumentType.getString(context, "confirmPassword");
 
                     if (Combatpersistence.authManager.isAuthenticated(player)) {
-                        player.sendSystemMessage(Component.literal("§cYou are already logged in!"));
+                        player.sendSystemMessage(Component.literal(Combatpersistence.config.alreadyLoggedIn));
                         return 0;
                     }
                     if (Combatpersistence.authManager.isRegistered(player.getUUID())) {
-                        player.sendSystemMessage(Component.literal("§cYou are already registered!"));
+                        player.sendSystemMessage(Component.literal(Combatpersistence.config.alreadyRegistered));
                         return 0;
                     }
                     if (!pwd.equals(confirm)) {
-                        player.sendSystemMessage(Component.literal("§cPasswords do not match!"));
+                        player.sendSystemMessage(Component.literal(Combatpersistence.config.passwordMismatch));
                         return 0;
                     }
 
@@ -40,7 +40,7 @@ public class AuthCommands {
                             // Verify player is still connected and valid after async hashing
                             if (player.connection != null && !player.isRemoved()) {
                                 Combatpersistence.authManager.onAuthenticated(player);
-                                player.sendSystemMessage(Component.literal("§aSuccessfully registered and logged in!"));
+                                player.sendSystemMessage(Component.literal(Combatpersistence.config.registerSuccess));
                                 SkinManager.applySkin(player, player.getName().getString());
                             }
                         });
@@ -56,7 +56,7 @@ public class AuthCommands {
                     String pwd = StringArgumentType.getString(context, "password");
 
                     if (Combatpersistence.authManager.isAuthenticated(player)) {
-                        player.sendSystemMessage(Component.literal("§cYou are already logged in!"));
+                        player.sendSystemMessage(Component.literal(Combatpersistence.config.alreadyLoggedIn));
                         return 0;
                     }
 
@@ -67,13 +67,13 @@ public class AuthCommands {
                                 // Verify player is still connected and valid after async hashing
                                 if (player.connection != null && !player.isRemoved()) {
                                     Combatpersistence.authManager.onAuthenticated(player);
-                                    player.sendSystemMessage(Component.literal("§aSuccessfully logged in!"));
+                                    player.sendSystemMessage(Component.literal(Combatpersistence.config.loginSuccess));
                                     String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());
                                     SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
                                 }
                             } else {
                                 if (player.connection != null && !player.isRemoved()) {
-                                    player.sendSystemMessage(Component.literal("§cIncorrect password!"));
+                                    player.sendSystemMessage(Component.literal(Combatpersistence.config.incorrectPassword));
                                 }
                             }
                         });
@@ -87,13 +87,13 @@ public class AuthCommands {
                 .executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     if (!Combatpersistence.authManager.isAuthenticated(player)) {
-                        player.sendSystemMessage(Component.literal("§cYou must log in to change your skin!"));
+                        player.sendSystemMessage(Component.literal(Combatpersistence.config.authRequiredForSkin));
                         return 0;
                     }
                     String skinName = StringArgumentType.getString(context, "name");
                     Combatpersistence.authManager.setCustomSkin(player.getUUID(), skinName);
                     SkinManager.applySkin(player, skinName);
-                    player.sendSystemMessage(Component.literal("§aApplied skin: " + skinName));
+                    player.sendSystemMessage(Component.literal(String.format(Combatpersistence.config.skinAppliedMessage, skinName)));
                     return 1;
                 })));
 

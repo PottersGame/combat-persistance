@@ -27,7 +27,9 @@ The configuration file is located at `config/combatpersistence.json`.
 | `combatTagDurationSeconds` | 15 | Duration of the combat tag in seconds. |
 | `npcNamePrefix` | `§7[OFFLINE] §f` | The prefix applied to the NPC's name tag. |
 | `playSpawnSound` | `true` | Plays a thunder sound when an NPC spawns. |
-| `combatMessage` | `...` | The action bar message shown to tagged players. Use `%s` for time remaining. |
+| `combatMessage` | `§c§lIN COMBAT: §f%s s remaining` | The action bar message shown to tagged players. Use `%s` for time remaining. |
+| `npcDeathBroadcast` | `§c[PvP] §7%s combat logged and was slain!` | The message broadcast when an NPC is killed. |
+| `inventoryRestoredMessage` | `§aYour inventory has been restored.` | Message sent when a player's inventory is restored. |
 | `blockedCommands` | `[...]` | List of commands disabled during combat (e.g., /spawn, /home). |
 
 ### Authentication Settings
@@ -38,6 +40,19 @@ The configuration file is located at `config/combatpersistence.json`.
 | `sessionDurationHours` | 24 | How long an autologin session lasts for standard players. |
 | `hideCoordinatesBeforeAuth`| `true` | Conceals the player's location from unauthenticated users. |
 | `authTimeoutSeconds` | 60 | Time in seconds before an unauthenticated player is kicked. |
+| `loginTimeoutMessage` | `§cLogin timeout!` | Kick message when authentication times out. |
+| `registerPrompt` | `§6Please register using /register <password> <confirmPassword>` | Message prompting for registration. |
+| `loginPrompt` | `§6Please log in using /login <password>` | Message prompting for login. |
+| `registerSuccess` | `§aSuccessfully registered and logged in!` | Message sent upon successful registration. |
+| `loginSuccess` | `§aSuccessfully logged in!` | Message sent upon successful login. |
+| `alreadyLoggedIn` | `§cYou are already logged in!` | Error message when already logged in. |
+| `alreadyRegistered` | `§cYou are already registered!` | Error message when already registered. |
+| `passwordMismatch` | `§cPasswords do not match!` | Error message for password mismatch. |
+| `incorrectPassword` | `§cIncorrect password!` | Error message for incorrect password. |
+| `authRequiredForCommand` | `§cYou must log in to use commands!` | Error message when using commands without auth. |
+| `authRequiredForChat` | `§cYou must log in to chat!` | Error message when chatting without auth. |
+| `authRequiredForSkin` | `§cYou must log in to change your skin!` | Error message when changing skins without auth. |
+| `skinAppliedMessage` | `§aApplied skin: %s` | Message confirming skin application. |
 | `lobbyDimension` | `overworld` | The dimension where unauthenticated players are held. |
 | `lobbyX, lobbyY, lobbyZ` | `0, 1000, 0` | The coordinates for the authentication lobby. |
 
