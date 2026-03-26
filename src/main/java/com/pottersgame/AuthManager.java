@@ -222,7 +222,7 @@ public class AuthManager {
             } finally {
                 authSaveLock.unlock();
             }
-        });
+        }, Combatpersistence.IO_EXECUTOR);
     }
 
     private void loadLocations() {
@@ -248,6 +248,6 @@ public class AuthManager {
             } finally {
                 locSaveLock.unlock();
             }
-        });
+        }, Combatpersistence.IO_EXECUTOR);
     }
 }
