@@ -1,0 +1,4 @@
+## 2025-02-14 - Fix Thread Starvation DoS & Authentication Race Condition
+**Vulnerability:** The application was using the default ForkJoinPool for CPU-intensive hashing (BCrypt) and blocking file/network I/O tasks. This allowed a Denial of Service (DoS) attack where attackers could starve the thread pool. In addition, an authentication race condition existed where disconnected/reconnecting players could bypass checks.
+**Learning:** Never use CompletableFuture.runAsync() or CompletableFuture.supplyAsync() without providing a dedicated Executor if the task involves blocking I/O or heavy computation. Always verify the player connection status on the main thread after an async callback.
+**Prevention:** Always provide a dedicated ExecutorService (like IO_EXECUTOR) for blocking operations. Always check !player.hasDisconnected() in the main thread execution after an asynchronous operation.

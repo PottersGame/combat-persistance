@@ -88,7 +88,7 @@ public class SkinManager {
                 Combatpersistence.LOGGER.error("Failed to fetch skin {} from Mojang API", identifier, e);
             }
             return null;
-        });
+        }, Combatpersistence.IO_EXECUTOR);
     }
 
     private static MinecraftServer getServer(ServerPlayer player) {

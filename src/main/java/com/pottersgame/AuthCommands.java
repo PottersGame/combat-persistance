@@ -38,7 +38,7 @@ public class AuthCommands {
                         Combatpersistence.authManager.register(player, pwd);
                         context.getSource().getServer().execute(() -> {
                             // Verify player is still connected and valid after async hashing
-                            if (player.connection != null && !player.isRemoved()) {
+                            if (player.connection != null && !player.hasDisconnected()) {
                                 Combatpersistence.authManager.onAuthenticated(player);
                                 player.sendSystemMessage(Component.literal(Combatpersistence.config.registerSuccess));
                                 SkinManager.applySkin(player, player.getName().getString());
@@ -65,14 +65,14 @@ public class AuthCommands {
                         context.getSource().getServer().execute(() -> {
                             if (success) {
                                 // Verify player is still connected and valid after async hashing
-                                if (player.connection != null && !player.isRemoved()) {
+                                if (player.connection != null && !player.hasDisconnected()) {
                                     Combatpersistence.authManager.onAuthenticated(player);
                                     player.sendSystemMessage(Component.literal(Combatpersistence.config.loginSuccess));
                                     String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());
                                     SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
                                 }
                             } else {
-                                if (player.connection != null && !player.isRemoved()) {
+                                if (player.connection != null && !player.hasDisconnected()) {
                                     player.sendSystemMessage(Component.literal(Combatpersistence.config.incorrectPassword));
                                 }
                             }
