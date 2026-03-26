@@ -95,5 +95,5 @@ If the user provides a crash log with obfuscated names (like `class_123` or `met
 ## Core Directives for the AI
 1.  **Always Verify Mappings:** If you are unsure of a class name or method signature, search it using `mc-lookup.py` rather than guessing.
 2.  **Scaffold First:** Use the scaffolding Python scripts to lay down the boilerplate, then manually modify the generated JSON files if custom logic is required.
-3.  **Compile & Test:** Whenever you change Java code, ask the user if you should run `.\gradlew.bat build` to ensure the mod compiles correctly.
+3.  **Compile & Test:** Whenever you change Java code, always run `.\gradlew.bat build` to ensure the mod compiles correctly.
 4.  **Stay Context-Aware:** Before starting a complex task, map out the workspace to understand existing classes in `src/main/java`.

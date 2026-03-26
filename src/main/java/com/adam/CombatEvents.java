@@ -96,11 +96,23 @@ public class CombatEvents {
             UUID uuid = player.getUUID();
             if (Combatpersistence.authManager.isAuthenticated(player) && tracker.isInCombat(player)) {
                 List<ItemStack> fullInv = new ArrayList<>();
+                // Copy all items including cursor stack
                 for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
                     fullInv.add(player.getInventory().getItem(i).copy());
                 }
-                CombatNPC npc = CombatNPC.spawn(player);
+                
+                // CRITICAL: Include the item currently held by the cursor (ScreenHandler stack)
+                ItemStack cursorStack = player.containerMenu.getCarried().copy();
+                if (!cursorStack.isEmpty()) {
+                    fullInv.add(cursorStack);
+                }
+
+                CombatNPC npc = CombatNPC.spawn(player, fullInv);
                 tracker.addNPC(uuid, npc.getUUID(), fullInv, (ServerLevel) player.level());
+
+                // CRITICAL FIX: Clear everything before the server saves the player data
+                player.getInventory().clearContent();
+                player.containerMenu.setCarried(ItemStack.EMPTY); // Clear cursor stack
             }
             Combatpersistence.authManager.logout(player);
             joinTimes.remove(uuid);
@@ -119,9 +131,9 @@ public class CombatEvents {
 
             if (config.enableAuth && (!server.usesAuthentication() || !config.forceAuthInOfflineMode)) {
                 if (Combatpersistence.authManager.checkAutoLogin(player)) {
-                    player.sendSystemMessage(Component.literal("§aWelcome back! Auto-logged in via IP."));
+                    player.sendSystemMessage(Component.literal("§aWelcome back! Autologin session verified."));
                     
-                    // Successful Auto-login
+                    // Successful Session-login
                     Combatpersistence.authManager.onAuthenticated(player);
                     
                     String skin = Combatpersistence.authManager.getCustomSkin(uuid);

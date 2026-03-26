@@ -22,6 +22,7 @@ import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class AuthManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -31,6 +32,9 @@ public class AuthManager {
     private Map<UUID, UserData> users = new ConcurrentHashMap<>();
     private final Set<UUID> authenticatedPlayers = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private Map<UUID, OriginalLocation> preAuthLocations = new ConcurrentHashMap<>();
+    
+    private final ReentrantLock authSaveLock = new ReentrantLock();
+    private final ReentrantLock locSaveLock = new ReentrantLock();
 
     public AuthManager() {
         loadUsers();
@@ -42,11 +46,41 @@ public class AuthManager {
         public String lastIp;
         public long lastLoginTime;
         public String customSkin;
+        public boolean isPremium = false;
 
         public UserData(String hash, String ip) {
             this.passwordHash = hash;
             this.lastIp = ip;
             this.lastLoginTime = System.currentTimeMillis();
+        }
+    }
+
+    public boolean checkAutoLogin(ServerPlayer player) {
+        UserData data = users.get(player.getUUID());
+        if (data == null) return false;
+
+        String currentIp = getIp(player);
+        long now = System.currentTimeMillis();
+        long hoursSinceLastLogin = (now - data.lastLoginTime) / (1000 * 60 * 60);
+        
+        // Premium users get 30 days (720 hours), Cracked get 24 hours
+        long allowedHours = data.isPremium ? 720 : 24;
+
+        if (currentIp.equals(data.lastIp) && hoursSinceLastLogin < allowedHours) {
+            authenticatedPlayers.add(player.getUUID());
+            // Update last login time to extend the session
+            data.lastLoginTime = now;
+            saveUsers();
+            return true;
+        }
+        return false;
+    }
+
+    public void setPremium(UUID uuid, boolean premium) {
+        UserData data = users.get(uuid);
+        if (data != null) {
+            data.isPremium = premium;
+            saveUsers();
         }
     }
 
@@ -94,28 +128,18 @@ public class AuthManager {
         return false;
     }
 
-    public boolean checkAutoLogin(ServerPlayer player) {
-        UserData data = users.get(player.getUUID());
-        if (data == null) return false;
-
-        String currentIp = getIp(player);
-        long hoursSinceLastLogin = (System.currentTimeMillis() - data.lastLoginTime) / (1000 * 60 * 60);
-        
-        if (currentIp.equals(data.lastIp) && hoursSinceLastLogin < Combatpersistence.config.sessionDurationHours) {
-            authenticatedPlayers.add(player.getUUID());
-            return true;
-        }
-        return false;
-    }
-
     // This MUST be called on the Server Main Thread
     public void onAuthenticated(ServerPlayer player) {
+        if (!authenticatedPlayers.contains(player.getUUID())) {
+            authenticatedPlayers.add(player.getUUID());
+        }
+
         player.setNoGravity(false);
         player.setInvulnerable(false);
         player.removeEffect(MobEffects.SLOWNESS);
         player.removeEffect(MobEffects.MINING_FATIGUE);
         
-        // This MUST run before restoring location, in case they died in a different dimension.
+        // Ensure pending deaths are handled BEFORE restoring location
         CombatEvents.handlePendingDeath(player);
         
         restoreLocation(player);
@@ -187,10 +211,13 @@ public class AuthManager {
     private void saveUsers() {
         Map<UUID, UserData> copy = new HashMap<>(users);
         CompletableFuture.runAsync(() -> {
+            authSaveLock.lock();
             try (FileWriter writer = new FileWriter(AUTH_FILE)) {
                 GSON.toJson(copy, writer);
             } catch (IOException e) {
                 Combatpersistence.LOGGER.error("Failed to save auth data in background", e);
+            } finally {
+                authSaveLock.unlock();
             }
         });
     }
@@ -210,10 +237,13 @@ public class AuthManager {
     private void saveLocations() {
         Map<UUID, OriginalLocation> copy = new HashMap<>(preAuthLocations);
         CompletableFuture.runAsync(() -> {
+            locSaveLock.lock();
             try (FileWriter writer = new FileWriter(LOC_FILE)) {
                 GSON.toJson(copy, writer);
             } catch (IOException e) {
                 Combatpersistence.LOGGER.error("Failed to save pending locations in background", e);
+            } finally {
+                locSaveLock.unlock();
             }
         });
     }

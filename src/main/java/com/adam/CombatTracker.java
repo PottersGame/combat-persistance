@@ -18,6 +18,7 @@ import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class CombatTracker {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -27,6 +28,8 @@ public class CombatTracker {
     private final Map<UUID, ActiveNPCData> activeNPCs = new ConcurrentHashMap<>();
     private Set<UUID> offlineDeaths = new HashSet<>();
     private final Set<UUID> pendingJoinDeaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    
+    private final ReentrantLock saveLock = new ReentrantLock();
 
     public CombatTracker() {
         loadData();
@@ -106,6 +109,31 @@ public class CombatTracker {
 
     public void handleEntityDeath(Entity entity) {
         UUID entityUuid = entity.getUUID();
+        
+        // 1. Check if it's a CombatNPC with its own stored inventory (BEST persistence)
+        if (entity instanceof CombatNPC npc) {
+            List<ItemStack> inventory = npc.getStoredInventory();
+            if (!inventory.isEmpty()) {
+                for (ItemStack stack : inventory) {
+                    entity.spawnAtLocation((ServerLevel) entity.level(), stack);
+                }
+            } else {
+                // Fallback to memory cache only if NPC's NBT was empty for some reason
+                for (ActiveNPCData data : activeNPCs.values()) {
+                    if (data.npcUuid.equals(entityUuid)) {
+                        dropNpcInventory(entity, data);
+                        break;
+                    }
+                }
+            }
+            
+            if (npc.originalPlayerUuid != null) {
+                markOfflineDeath(npc.originalPlayerUuid);
+            }
+            return;
+        }
+
+        // 2. Generic fallback for non-CombatNPC entities (shouldn't happen for our NPCs anymore)
         for (ActiveNPCData data : activeNPCs.values()) {
             if (data.npcUuid.equals(entityUuid)) {
                 dropNpcInventory(entity, data);
@@ -122,7 +150,10 @@ public class CombatTracker {
                     CompoundTag tag = net.minecraft.nbt.TagParser.parseCompoundFully(nbtStr);
                     ItemStack.CODEC.parse(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), tag)
                         .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to decode item: {}", e))
-                        .ifPresent(stack -> entity.spawnAtLocation(world, stack));
+                        .ifPresent(stack -> {
+                             // Use spawnAtLocation for safety
+                             entity.spawnAtLocation(world, stack);
+                        });
                 } catch (Exception e) {
                     Combatpersistence.LOGGER.error("Failed to parse NPC inventory item string", e);
                 }
@@ -141,6 +172,7 @@ public class CombatTracker {
         Map<UUID, ActiveNPCData> npcsCopy = new HashMap<>(activeNPCs);
         
         Runnable saveAction = () -> {
+            saveLock.lock();
             try (FileWriter writer = new FileWriter(DATA_FILE)) {
                 JsonObject root = new JsonObject();
                 root.add("offlineDeaths", GSON.toJsonTree(deathsCopy));
@@ -149,6 +181,8 @@ public class CombatTracker {
                 GSON.toJson(root, writer);
             } catch (IOException e) {
                 Combatpersistence.LOGGER.error("Failed to save combat data", e);
+            } finally {
+                saveLock.unlock();
             }
         };
 

@@ -26,23 +26,65 @@ import java.util.concurrent.CompletableFuture;
 
 public class CombatNPC extends Mannequin {
 
-    public final UUID originalPlayerUuid;
-    private final String originalPlayerName;
+    public UUID originalPlayerUuid;
+    public String originalPlayerName;
     private boolean hasDropped = false;
+    private final List<ItemStack> storedInventory = new ArrayList<>();
 
-    public CombatNPC(ServerLevel world, UUID originalPlayerUuid, String originalPlayerName) {
+    public CombatNPC(EntityType<net.minecraft.world.entity.decoration.Mannequin> type, net.minecraft.world.level.Level world) {
+        super(type, world);
+    }
+
+    public CombatNPC(ServerLevel world, UUID originalPlayerUuid, String originalPlayerName, List<ItemStack> inventory) {
         super(EntityType.MANNEQUIN, world);
         this.originalPlayerUuid = originalPlayerUuid;
         this.originalPlayerName = originalPlayerName;
+        this.storedInventory.addAll(inventory);
     }
 
-    public static CombatNPC spawn(ServerPlayer original) {
+    @Override
+    protected void addAdditionalSaveData(net.minecraft.world.level.storage.ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        if (originalPlayerUuid != null) {
+            output.store("OriginalPlayerUuid", net.minecraft.core.UUIDUtil.CODEC, originalPlayerUuid);
+        }
+        if (originalPlayerName != null) {
+            output.putString("OriginalPlayerName", originalPlayerName);
+        }
+        output.putBoolean("HasDropped", hasDropped);
+
+        if (!storedInventory.isEmpty()) {
+            net.minecraft.world.level.storage.ValueOutput.TypedOutputList<ItemStack> invList = output.list("StoredInventory", ItemStack.CODEC);
+            for (ItemStack stack : storedInventory) {
+                invList.add(stack);
+            }
+        }
+    }
+
+    @Override
+    protected void readAdditionalSaveData(net.minecraft.world.level.storage.ValueInput input) {
+        super.readAdditionalSaveData(input);
+        this.originalPlayerUuid = input.read("OriginalPlayerUuid", net.minecraft.core.UUIDUtil.CODEC).orElse(null);
+        this.originalPlayerName = input.getString("OriginalPlayerName").orElse(null);
+        this.hasDropped = input.getBooleanOr("HasDropped", false);
+
+        this.storedInventory.clear();
+        input.list("StoredInventory", ItemStack.CODEC).ifPresent(list -> {
+            list.stream().forEach(this.storedInventory::add);
+        });
+    }
+
+    public List<ItemStack> getStoredInventory() {
+        return storedInventory;
+    }
+
+    public static CombatNPC spawn(ServerPlayer original, List<ItemStack> inventory) {
         ServerLevel world = (ServerLevel) original.level();
         MinecraftServer server = world.getServer();
         CombatConfig config = Combatpersistence.config;
 
         String playerName = original.getName().getString();
-        CombatNPC npc = new CombatNPC(world, original.getUUID(), playerName);
+        CombatNPC npc = new CombatNPC(world, original.getUUID(), playerName, inventory);
 
         // Visual setup
         GameProfile currentProfile = original.getGameProfile();

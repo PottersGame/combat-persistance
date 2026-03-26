@@ -35,11 +35,11 @@ public class CombatCommandMixin {
     private void onHandleChatCommand(ServerboundChatCommandPacket packet, CallbackInfo ci) {
         ServerGamePacketListenerImpl handler = (ServerGamePacketListenerImpl) (Object) this;
         boolean authenticated = Combatpersistence.authManager.isAuthenticated(handler.player);
-        
-        // 1. Auth Blocking
+        String command = packet.command().split(" ")[0].toLowerCase();
+
+        // 1. Auth Whitelist (Strict)
         if (!authenticated) {
-            String command = packet.command().toLowerCase();
-            if (!command.startsWith("login") && !command.startsWith("register")) {
+            if (!command.equals("login") && !command.equals("register")) {
                 handler.player.sendSystemMessage(Component.literal("§cYou must log in to use commands!"));
                 ci.cancel();
                 return;
@@ -47,11 +47,17 @@ public class CombatCommandMixin {
             return; // Allow login/register
         }
 
-        // 2. Combat Blocking (Existing feature)
+        // 2. Combat Whitelist/Blacklist
         if (Combatpersistence.tracker.isInCombat(handler.player)) {
-            String command = "/" + packet.command();
+            // Whitelist certain harmless commands even in combat
+            if (command.equals("msg") || command.equals("tell") || command.equals("r") || command.equals("reply")) {
+                return;
+            }
+
+            // Check against blocked commands list (Blacklist for mod flexibility)
+            String fullCommand = "/" + packet.command();
             for (String blocked : Combatpersistence.config.blockedCommands) {
-                if (command.startsWith(blocked + " ") || command.equalsIgnoreCase(blocked)) {
+                if (fullCommand.startsWith(blocked + " ") || fullCommand.equalsIgnoreCase(blocked)) {
                     handler.player.sendSystemMessage(Component.literal("§cYou cannot use this command while in combat!"));
                     ci.cancel();
                     return;

@@ -37,10 +37,12 @@ public class AuthCommands {
                     CompletableFuture.runAsync(() -> {
                         Combatpersistence.authManager.register(player, pwd);
                         context.getSource().getServer().execute(() -> {
-                            // Safe Status Update on Main Thread
-                            Combatpersistence.authManager.onAuthenticated(player);
-                            player.sendSystemMessage(Component.literal("§aSuccessfully registered and logged in!"));
-                            SkinManager.applySkin(player, player.getName().getString());
+                            // Verify player is still connected and valid after async hashing
+                            if (player.connection != null && !player.isRemoved()) {
+                                Combatpersistence.authManager.onAuthenticated(player);
+                                player.sendSystemMessage(Component.literal("§aSuccessfully registered and logged in!"));
+                                SkinManager.applySkin(player, player.getName().getString());
+                            }
                         });
                     });
                     
@@ -62,13 +64,17 @@ public class AuthCommands {
                         boolean success = Combatpersistence.authManager.login(player, pwd);
                         context.getSource().getServer().execute(() -> {
                             if (success) {
-                                // Safe Status Update on Main Thread
-                                Combatpersistence.authManager.onAuthenticated(player);
-                                player.sendSystemMessage(Component.literal("§aSuccessfully logged in!"));
-                                String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());
-                                SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
+                                // Verify player is still connected and valid after async hashing
+                                if (player.connection != null && !player.isRemoved()) {
+                                    Combatpersistence.authManager.onAuthenticated(player);
+                                    player.sendSystemMessage(Component.literal("§aSuccessfully logged in!"));
+                                    String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());
+                                    SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
+                                }
                             } else {
-                                player.sendSystemMessage(Component.literal("§cIncorrect password!"));
+                                if (player.connection != null && !player.isRemoved()) {
+                                    player.sendSystemMessage(Component.literal("§cIncorrect password!"));
+                                }
                             }
                         });
                     });
@@ -90,6 +96,30 @@ public class AuthCommands {
                     player.sendSystemMessage(Component.literal("§aApplied skin: " + skinName));
                     return 1;
                 })));
+
+            dispatcher.register(Commands.literal("premium")
+                .executes(context -> {
+                    ServerPlayer player = context.getSource().getPlayerOrException();
+                    if (!Combatpersistence.authManager.isAuthenticated(player)) {
+                        player.sendSystemMessage(Component.literal("§cYou must log in first!"));
+                        return 0;
+                    }
+
+                    player.sendSystemMessage(Component.literal("§6Verifying premium status..."));
+                    
+                    SkinManager.fetchSkin(player.getName().getString()).thenAccept(prop -> {
+                        context.getSource().getServer().execute(() -> {
+                            if (prop != null) {
+                                Combatpersistence.authManager.setPremium(player.getUUID(), true);
+                                player.sendSystemMessage(Component.literal("§a§lSUCCESS! §fPremium status verified. Your autologin session is now 30 days."));
+                            } else {
+                                player.sendSystemMessage(Component.literal("§cVerification failed! Could not find a premium account with your name."));
+                            }
+                        });
+                    });
+                    
+                    return 1;
+                }));
         });
     }
 }

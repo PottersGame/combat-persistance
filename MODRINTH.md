@@ -1,38 +1,41 @@
-# Combat Persistence
+# Combat Persistence 🛡️
 
-Combat Persistence is a server-side Fabric mod designed to prevent "combat logging" by replacing disconnecting players with a vulnerable NPC. If the NPC is killed while the player is offline, the player's inventory is dropped, and they will die immediately upon rejoining the server.
+**Combat Persistence** is a professional-grade, server-side Fabric mod designed for competitive Minecraft servers. It prevents "combat logging" by spawning a vulnerable NPC whenever a player disconnects while in combat, ensuring that players cannot evade death by simply closing the game.
 
-### Features
-- **Mannequin NPCs**: When a player in combat disconnects, a `Mannequin` entity is spawned at their location.
-- **Visual Mirroring**: NPCs copy the player's Skin (via SkinManager/Mojang API), Armor, and Held Items.
-- **Inventory Protection/Risk**: The NPC stores the player's full inventory. If the NPC survives, the player is safe; if it is killed, the items drop on the ground.
-- **Offline Death Handling**: Players who lose their NPC while offline are marked in `combat_persistence_data.json` and killed instantly upon rejoining.
-- **Command Blocking**: Configurable list of commands (e.g., `/spawn`, `/tp`, `/home`) that are blocked while in combat.
-- **Integrated Auth System**: Includes an optional authentication system with features like lobby teleportation and coordinate hiding before login.
-- **Server-Side Only**: No client-side installation is required.
+### 🌟 Key Features
 
-### How It Works
-1. **Combat Tagging**: Attacking or being attacked by a player tags you for a set duration (default: 15 seconds).
-2. **Persistence**: If you disconnect while tagged, a Mannequin NPC spawns with your health and inventory.
-3. **The Outcome**:
-    - If the NPC survives the remaining tag time, it is discarded, and you login normally later.
-    - If the NPC is killed, it drops your items, and you will see a death screen on your next login.
+*   **Smart Combat Tagging**: Monitors player interactions and tags those in combat. Configurable duration and action bar feedback.
+*   **Persistent NPCs**: disconnects while tagged spawn a `Mannequin` NPC at the player's exact spot.
+    *   NPCs mirror the player's visual appearance (Armor, Skins, Held Items).
+    *   NPCs are backed by **NBT data**, meaning they survive chunk unloads and server restarts.
+*   **Reliable Offline Deaths**: If your NPC is killed while you are offline, you will find yourself at the death screen upon rejoining. No "ghost items" or survival glitches.
+*   **Advanced Dupe Protection**: Rigorously tested logic that clears both the inventory and the **cursor stack** (carried items) immediately on disconnect to eliminate duplication exploits.
+*   **Built-in Secure Authentication**:
+    *   **Session Management**: Remembers your login state (24-hour session for cracked, **30 days for premium**).
+    *   **Premium Verification**: Use `/premium` to link your account to Mojang's official servers for enhanced security and convenience.
+    *   **Safe Limbo**: Teleports unauthenticated players to a lobby and hides their coordinates to prevent world-leaking.
+*   **Command Blocking**: Prevent players from running `/tp`, `/home`, or `/spawn` to escape a fight.
+*   **No Client Needed**: This is a 100% server-side mod. Your players don't need to install anything!
 
-### Configuration (`config/combatpersistence.json`)
-- `combatTagDurationSeconds`: How long the combat tag lasts (Default: 15).
-- `npcNamePrefix`: Prefix for the NPC's name tag (Default: `§7[OFFLINE] §f`).
-- `playSpawnSound`: Whether to play a thunder sound when an NPC spawns.
-- `blockedCommands`: List of commands to disable during combat.
-- `enableAuth`: Toggle the built-in authentication system.
-- `authTimeoutSeconds`: Time allowed to login before being kicked.
+### 🔧 Configuration
 
-### Data Storage
-The mod saves active NPCs and pending offline deaths to `config/combat_persistence_data.json` to ensure combat states persist through server restarts.
+All settings can be customized in `config/combatpersistence.json`:
+- `combatTagDurationSeconds`: Customize the length of the tag.
+- `blockedCommands`: Add your own custom commands to the blacklist.
+- `enableAuth`: Toggle the entire authentication system on or off.
+- `npcNamePrefix`: Change how offline players are labeled in-game.
 
-### Requirements
+### 📦 Requirements
+
 - **Fabric Loader**
 - **Fabric API**
-- **Minecraft 26.1+** (Java 25)
+- **Minecraft 26.1+**
+- **Java 25+**
 
-### License
-Licensed under GPL-3.0. Source code available on [GitHub](https://github.com/PottersGame/combat-persistance).
+### 💎 Why Combat Persistence?
+
+Unlike many other combat-log solutions, Combat Persistence is built with an **exploit-first** mindset. We have manually patched duplication glitches involving cursor stacks, inventory ghosting, and authentication bypasses that plague other similar mods.
+
+---
+
+[Source Code](https://github.com/PottersGame/combat-persistance) | [Issue Tracker](https://github.com/PottersGame/combat-persistance/issues) | [GPL-3.0 License](https://github.com/PottersGame/combat-persistance/blob/main/LICENSE)
