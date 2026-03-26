@@ -39,11 +39,16 @@ public class CombatEvents {
 
                 Entity attackerEntity = source.getEntity();
                 
+                // Tag if attacked by another player
                 if (attackerEntity instanceof ServerPlayer attacker && Combatpersistence.authManager.isAuthenticated(attacker)) {
                     if (victim != attacker && !victim.getAbilities().instabuild && !attacker.getAbilities().instabuild) {
                         tracker.tag(victim, config.combatTagDurationSeconds);
                         tracker.tag(attacker, config.combatTagDurationSeconds);
                     }
+                } 
+                // ALSO tag if attacked by a mob (PvE)
+                else if (attackerEntity instanceof net.minecraft.world.entity.LivingEntity) {
+                    tracker.tag(victim, config.combatTagDurationSeconds);
                 }
             }
             if (entity instanceof CombatNPC victimNpc) {
@@ -106,7 +111,13 @@ public class CombatEvents {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer player = handler.getPlayer();
             UUID uuid = player.getUUID();
-            if (Combatpersistence.authManager.isAuthenticated(player) && tracker.isInCombat(player)) {
+            boolean authenticated = Combatpersistence.authManager.isAuthenticated(player);
+            boolean inCombat = tracker.isInCombat(player);
+            
+            Combatpersistence.LOGGER.info("Player {} disconnected. Auth: {}, InCombat: {}", player.getName().getString(), authenticated, inCombat);
+
+            if (authenticated && inCombat) {
+                Combatpersistence.LOGGER.info("Spawning CombatNPC for {}...", player.getName().getString());
                 List<ItemStack> fullInv = new ArrayList<>();
                 // Copy all items including cursor stack
                 for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
@@ -131,11 +142,18 @@ public class CombatEvents {
                 }
 
                 CombatNPC npc = CombatNPC.spawn(player, fullInv);
-                tracker.addNPC(uuid, npc.getUUID(), fullInv, (ServerLevel) player.level());
+                
+                if (npc != null) {
+                    Combatpersistence.LOGGER.info("Successfully initiated CombatNPC for {}. NPC UUID: {}", player.getName().getString(), npc.getUUID());
+                } else {
+                    Combatpersistence.LOGGER.error("Failed to spawn CombatNPC for {}!", player.getName().getString());
+                }
 
                 // CRITICAL FIX: Clear everything before the server saves the player data
                 player.getInventory().clearContent();
                 player.containerMenu.setCarried(ItemStack.EMPTY); // Clear cursor stack
+            } else if (inCombat) {
+                Combatpersistence.LOGGER.warn("Player {} was in combat but NOT authenticated! No NPC spawned.", player.getName().getString());
             }
             Combatpersistence.authManager.logout(player);
             joinTimes.remove(uuid);

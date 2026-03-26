@@ -150,8 +150,8 @@ public class SkinManager {
     }
 
     private static void refreshPlayer(ServerPlayer player) {
-        MinecraftServer server = getServer(player);
-        if (server == null) return;
+        if (!(player.level() instanceof ServerLevel world)) return;
+        MinecraftServer server = world.getServer();
         List<ServerPlayer> players = server.getPlayerList().getPlayers();
         
         ClientboundPlayerInfoRemovePacket removePacket = new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID()));
@@ -163,9 +163,8 @@ public class SkinManager {
 
             // If the viewer is the player themselves, we need a more forceful update
             if (viewer == player) {
-                ServerLevel world = (ServerLevel) player.level();
                 // Send a respawn packet with KEEP_ALL_DATA to force entity recreation without losing state
-                player.connection.send(new ClientboundRespawnPacket(player.createCommonSpawnInfo(world), ClientboundRespawnPacket.KEEP_ALL_DATA));
+                player.connection.send(new ClientboundRespawnPacket(player.createCommonSpawnInfo(world), (byte) 3));
                 
                 // Teleport them to their current position to trigger the camera/position sync
                 TeleportTransition transition = new TeleportTransition(
@@ -184,6 +183,11 @@ public class SkinManager {
                 server.getPlayerList().sendLevelInfo(player, world);
                 server.getPlayerList().sendAllPlayerInfo(player);
                 player.containerMenu.sendAllDataToRemote();
+            } else if (viewer.level() == player.level()) {
+                // Force recreation for other viewers to refresh the skin
+                viewer.connection.send(new net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket(player.getId()));
+                viewer.connection.send(new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(player, 0, player.blockPosition()));
+                viewer.connection.send(new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(player.getId(), player.getEntityData().getNonDefaultValues()));
             }
         }
     }

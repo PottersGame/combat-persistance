@@ -144,7 +144,11 @@ public class CombatNPC extends Mannequin {
             npc.setItemSlot(slot, original.getItemBySlot(slot).copy());
         }
 
-        world.addFreshEntity(npc);
+        // CRITICAL FIX: Add to tracker BEFORE adding to world to prevent ENTITY_LOAD discard
+        Combatpersistence.tracker.addNPC(original.getUUID(), npc.getUUID(), inventory, (ServerLevel) original.level());
+        
+        boolean spawned = world.addFreshEntity(npc);
+        Combatpersistence.LOGGER.info("Spawned CombatNPC for {} (UUID: {}). Success: {}", original.getName().getString(), npc.getUUID(), spawned);
 
         if (config.playSpawnSound) {
             world.playSound(null, npc.getX(), npc.getY(), npc.getZ(), 
