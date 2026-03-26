@@ -1,4 +1,4 @@
-package com.adam;
+package com.pottersgame;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

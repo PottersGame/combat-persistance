@@ -1,4 +1,4 @@
-package com.adam;
+package com.pottersgame;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;

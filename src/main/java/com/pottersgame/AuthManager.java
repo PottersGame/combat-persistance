@@ -1,4 +1,4 @@
-package com.adam;
+package com.pottersgame;
 
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;

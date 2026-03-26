@@ -1,6 +1,6 @@
-package com.adam.mixin;
+package com.pottersgame.mixin;
 
-import com.adam.Combatpersistence;
+import com.pottersgame.Combatpersistence;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;

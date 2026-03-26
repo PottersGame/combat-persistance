@@ -1,6 +1,6 @@
-package com.adam.mixin;
+package com.pottersgame.mixin;
 
-import com.adam.Combatpersistence;
+import com.pottersgame.Combatpersistence;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatPacket;

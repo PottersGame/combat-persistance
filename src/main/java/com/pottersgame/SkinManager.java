@@ -1,4 +1,4 @@
-package com.adam;
+package com.pottersgame;
 
 import com.google.common.collect.HashMultimap;
 import com.google.gson.JsonArray;
