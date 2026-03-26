@@ -1,6 +1,7 @@
 package com.pottersgame;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -16,6 +17,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.TeleportTransition;
@@ -91,6 +94,15 @@ public class CombatEvents {
             return InteractionResult.PASS;
         });
 
+        // CRITICAL FIX: Chunk Unload Dupe - Discard NPCs on load if they are no longer in active tracker
+        ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
+            if (entity instanceof CombatNPC) {
+                if (!tracker.isNpcActive(entity.getUUID())) {
+                    entity.discard();
+                }
+            }
+        });
+
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer player = handler.getPlayer();
             UUID uuid = player.getUUID();
@@ -105,6 +117,17 @@ public class CombatEvents {
                 ItemStack cursorStack = player.containerMenu.getCarried().copy();
                 if (!cursorStack.isEmpty()) {
                     fullInv.add(cursorStack);
+                }
+
+                // CRITICAL FIX: Include items in crafting grids or other temporary slots
+                for (Slot slot : player.containerMenu.slots) {
+                    if (slot.container != player.getInventory()) {
+                        ItemStack stack = slot.getItem();
+                        if (!stack.isEmpty()) {
+                            fullInv.add(stack.copy());
+                            slot.set(ItemStack.EMPTY); // Clear to prevent vanilla from dropping it
+                        }
+                    }
                 }
 
                 CombatNPC npc = CombatNPC.spawn(player, fullInv);
@@ -133,6 +156,10 @@ public class CombatEvents {
                 if (Combatpersistence.authManager.checkAutoLogin(player)) {
                     player.sendSystemMessage(Component.literal("§aWelcome back! Autologin session verified."));
                     
+                    // CRITICAL FIX: Auth Flow Data Loss - restore items even on autologin
+                    cleanUpNpc(player, tracker, server);
+                    handlePendingDeath(player);
+
                     // Successful Session-login
                     Combatpersistence.authManager.onAuthenticated(player);
                     
@@ -188,6 +215,40 @@ public class CombatEvents {
                     if (joinTime != null && (now - joinTime) > (config.authTimeoutSeconds * 1000L)) {
                         player.connection.disconnect(Component.literal(config.loginTimeoutMessage));
                         continue;
+                    }
+
+                    // CRITICAL FIX: Ender Pearl Lobby Escape - continuously lock to lobby and clear pearls
+                    if (config.hideCoordinatesBeforeAuth) {
+                        ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, Identifier.parse(config.lobbyDimension));
+                        if (!player.level().dimension().equals(dimKey)) {
+                            ServerLevel lobbyLevel = server.getLevel(dimKey);
+                            if (lobbyLevel != null) {
+                                TeleportTransition transition = new TeleportTransition(
+                                    lobbyLevel, 
+                                    new Vec3(config.lobbyX, config.lobbyY, config.lobbyZ), 
+                                    Vec3.ZERO, 0, 0, 
+                                    TeleportTransition.DO_NOTHING
+                                );
+                                player.teleport(transition);
+                            }
+                        } else if (player.distanceToSqr(config.lobbyX, config.lobbyY, config.lobbyZ) > 100) {
+                            TeleportTransition transition = new TeleportTransition(
+                                (ServerLevel) player.level(), 
+                                new Vec3(config.lobbyX, config.lobbyY, config.lobbyZ), 
+                                Vec3.ZERO, 0, 0, 
+                                TeleportTransition.DO_NOTHING
+                            );
+                            player.teleport(transition);
+                        }
+                    }
+
+                    // Clear any thrown ender pearls to prevent teleportation exploits
+                    Set<ThrownEnderpearl> pearls = player.getEnderPearls();
+                    if (!pearls.isEmpty()) {
+                        for (ThrownEnderpearl pearl : pearls) {
+                            pearl.discard();
+                        }
+                        pearls.clear();
                     }
 
                     if (server.getTickCount() % 100 == 0) {

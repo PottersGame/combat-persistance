@@ -83,6 +83,13 @@ public class CombatTracker {
         return data != null ? data.npcUuid : null;
     }
 
+    public boolean isNpcActive(UUID npcUuid) {
+        for (ActiveNPCData data : activeNPCs.values()) {
+            if (data.npcUuid.equals(npcUuid)) return true;
+        }
+        return false;
+    }
+
     public void removeNPC(UUID playerUuid) {
         activeNPCs.remove(playerUuid);
         saveData();
