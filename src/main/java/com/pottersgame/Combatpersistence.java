@@ -9,10 +9,22 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 public class Combatpersistence implements ModInitializer {
     public static final String MOD_ID = "combatpersistence";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+    public static final ExecutorService IO_EXECUTOR = Executors.newCachedThreadPool(new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+        }
+    });
 
     public static CombatConfig config;
     public static final CombatTracker tracker = new CombatTracker();

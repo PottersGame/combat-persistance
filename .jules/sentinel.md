@@ -1,0 +1,4 @@
+## 2024-03-31 - [High] Fix Exhaustion of Common ForkJoinPool / Auth Race Condition
+**Vulnerability:** Blocking I/O tasks like API requests and file saving were executing on the common ForkJoinPool, which could lead to exhaustion and DDoS. Additionally, authentication flow lacked a check whether a player had disconnected, causing a race condition where a logged out user could be authenticated when they log back in.
+**Learning:** CompletableFuture.runAsync / supplyAsync will use the common ForkJoinPool by default if an executor is not specified. Disconnection status can change while an asynchronous operation like a password hash runs.
+**Prevention:** Always provide a dedicated thread pool executor (like a cached thread pool) for blocking operations. Verify player connections state immediately before committing authentication state on the main thread callback.
