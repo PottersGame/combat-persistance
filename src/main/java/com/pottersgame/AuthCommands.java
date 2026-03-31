@@ -34,17 +34,18 @@ public class AuthCommands {
                         return 0;
                     }
 
-                    CompletableFuture.runAsync(() -> {
-                        Combatpersistence.authManager.register(player, pwd);
-                        context.getSource().getServer().execute(() -> {
-                            // Verify player is still connected and valid after async hashing
-                            if (player.connection != null && !player.isRemoved()) {
-                                Combatpersistence.authManager.onAuthenticated(player);
-                                player.sendSystemMessage(Component.literal(Combatpersistence.config.registerSuccess));
-                                SkinManager.applySkin(player, player.getName().getString());
-                            }
+                    CompletableFuture.supplyAsync(() -> Combatpersistence.authManager.hashPassword(pwd), Combatpersistence.IO_EXECUTOR)
+                        .thenAccept(hash -> {
+                            context.getSource().getServer().execute(() -> {
+                                // Verify player is still connected and valid after async hashing
+                                if (player.connection != null && !player.hasDisconnected()) {
+                                    Combatpersistence.authManager.applyRegistration(player, hash);
+                                    Combatpersistence.authManager.onAuthenticated(player);
+                                    player.sendSystemMessage(Component.literal(Combatpersistence.config.registerSuccess));
+                                    SkinManager.applySkin(player, player.getName().getString());
+                                }
+                            });
                         });
-                    });
                     
                     return 1;
                 }))));
@@ -60,24 +61,25 @@ public class AuthCommands {
                         return 0;
                     }
 
-                    CompletableFuture.runAsync(() -> {
-                        boolean success = Combatpersistence.authManager.login(player, pwd);
-                        context.getSource().getServer().execute(() -> {
-                            if (success) {
-                                // Verify player is still connected and valid after async hashing
-                                if (player.connection != null && !player.isRemoved()) {
-                                    Combatpersistence.authManager.onAuthenticated(player);
-                                    player.sendSystemMessage(Component.literal(Combatpersistence.config.loginSuccess));
-                                    String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());
-                                    SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
+                    CompletableFuture.supplyAsync(() -> Combatpersistence.authManager.checkPassword(player, pwd), Combatpersistence.IO_EXECUTOR)
+                        .thenAccept(success -> {
+                            context.getSource().getServer().execute(() -> {
+                                if (success) {
+                                    // Verify player is still connected and valid after async hashing
+                                    if (player.connection != null && !player.hasDisconnected()) {
+                                        Combatpersistence.authManager.finishLogin(player);
+                                        Combatpersistence.authManager.onAuthenticated(player);
+                                        player.sendSystemMessage(Component.literal(Combatpersistence.config.loginSuccess));
+                                        String skin = Combatpersistence.authManager.getCustomSkin(player.getUUID());
+                                        SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
+                                    }
+                                } else {
+                                    if (player.connection != null && !player.hasDisconnected()) {
+                                        player.sendSystemMessage(Component.literal(Combatpersistence.config.incorrectPassword));
+                                    }
                                 }
-                            } else {
-                                if (player.connection != null && !player.isRemoved()) {
-                                    player.sendSystemMessage(Component.literal(Combatpersistence.config.incorrectPassword));
-                                }
-                            }
+                            });
                         });
-                    });
                     
                     return 1;
                 })));

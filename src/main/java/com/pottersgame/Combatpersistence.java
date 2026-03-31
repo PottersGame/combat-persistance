@@ -9,6 +9,8 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Combatpersistence implements ModInitializer {
     public static final String MOD_ID = "combatpersistence";
@@ -17,6 +19,7 @@ public class Combatpersistence implements ModInitializer {
     public static CombatConfig config;
     public static final CombatTracker tracker = new CombatTracker();
     public static final AuthManager authManager = new AuthManager();
+    public static final ExecutorService IO_EXECUTOR = Executors.newCachedThreadPool();
     
     @Override
     public void onInitialize() {
