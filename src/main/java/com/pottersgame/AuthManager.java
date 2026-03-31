@@ -108,24 +108,33 @@ public class AuthManager {
         return authenticatedPlayers.contains(player.getUUID());
     }
 
-    public void register(ServerPlayer player, String password) {
-        String hash = BCrypt.hashpw(password, BCrypt.gensalt());
+    public String hashPassword(String password) {
+        return BCrypt.hashpw(password, BCrypt.gensalt());
+    }
+
+    public void applyRegistration(ServerPlayer player, String hash) {
         UserData data = new UserData(hash, getIp(player));
         users.put(player.getUUID(), data);
         authenticatedPlayers.add(player.getUUID());
         saveUsers();
     }
 
-    public boolean login(ServerPlayer player, String password) {
+    public boolean checkPassword(ServerPlayer player, String password) {
         UserData data = users.get(player.getUUID());
-        if (data != null && BCrypt.checkpw(password, data.passwordHash)) {
+        if (data != null) {
+            return BCrypt.checkpw(password, data.passwordHash);
+        }
+        return false;
+    }
+
+    public void finishLogin(ServerPlayer player) {
+        UserData data = users.get(player.getUUID());
+        if (data != null) {
             data.lastIp = getIp(player);
             data.lastLoginTime = System.currentTimeMillis();
             authenticatedPlayers.add(player.getUUID());
             saveUsers();
-            return true;
         }
-        return false;
     }
 
     // This MUST be called on the Server Main Thread
