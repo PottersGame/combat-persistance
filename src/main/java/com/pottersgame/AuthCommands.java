@@ -38,7 +38,7 @@ public class AuthCommands {
                         .thenAccept(hash -> {
                             context.getSource().getServer().execute(() -> {
                                 // Verify player is still connected and valid after async hashing
-                                if (player.connection != null && !player.hasDisconnected()) {
+                                if (player.connection != null && !player.isRemoved()) {
                                     Combatpersistence.authManager.applyRegistration(player, hash);
                                     Combatpersistence.authManager.onAuthenticated(player);
                                     player.sendSystemMessage(Component.literal(Combatpersistence.config.registerSuccess));
@@ -66,7 +66,7 @@ public class AuthCommands {
                             context.getSource().getServer().execute(() -> {
                                 if (success) {
                                     // Verify player is still connected and valid after async hashing
-                                    if (player.connection != null && !player.hasDisconnected()) {
+                                    if (player.connection != null && !player.isRemoved()) {
                                         Combatpersistence.authManager.finishLogin(player);
                                         Combatpersistence.authManager.onAuthenticated(player);
                                         player.sendSystemMessage(Component.literal(Combatpersistence.config.loginSuccess));
@@ -74,7 +74,7 @@ public class AuthCommands {
                                         SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
                                     }
                                 } else {
-                                    if (player.connection != null && !player.hasDisconnected()) {
+                                    if (player.connection != null && !player.isRemoved()) {
                                         player.sendSystemMessage(Component.literal(Combatpersistence.config.incorrectPassword));
                                     }
                                 }
