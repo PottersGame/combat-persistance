@@ -1,0 +1,4 @@
+## 2024-05-24 - Prevent thread exhaustion by using a dedicated executor for blocking I/O tasks
+**Vulnerability:** Asynchronous blocking operations (file I/O, network requests, BCrypt hashing) were scheduled on the default `ForkJoinPool` via `CompletableFuture.runAsync` and `supplyAsync`. In Java 21, `ForkJoinPool.commonPool()` is designed for CPU-bound tasks. Scheduling blocking I/O tasks on this pool can lead to thread exhaustion and a Denial of Service (DoS) vulnerability.
+**Learning:** `CompletableFuture` executes on the default `ForkJoinPool` when no executor is explicitly provided. Blocking this thread pool can impact other asynchronous operations in the application.
+**Prevention:** Always provide a dedicated, appropriately sized executor (e.g., `Executors.newCachedThreadPool()`) for blocking operations, such as file reads/writes, network calls, and CPU-intensive operations that block threads like BCrypt.
