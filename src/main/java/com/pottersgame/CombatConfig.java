@@ -85,6 +85,6 @@ public class CombatConfig {
             } finally {
                 saveLock.unlock();
             }
-        });
+        }, Combatpersistence.IO_EXECUTOR);
     }
 }
