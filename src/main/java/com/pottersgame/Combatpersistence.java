@@ -18,6 +18,8 @@ public class Combatpersistence implements ModInitializer {
     public static final CombatTracker tracker = new CombatTracker();
     public static final AuthManager authManager = new AuthManager();
     
+    public static final java.util.concurrent.ExecutorService IO_EXECUTOR = java.util.concurrent.Executors.newCachedThreadPool();
+
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing Combat Persistence Mod...");
