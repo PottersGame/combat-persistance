@@ -1,0 +1,4 @@
+## 2024-05-18 - Prevent URL Injection in External API Calls
+**Vulnerability:** URL injection vulnerability found in `SkinManager.java` where un-encoded user-provided identifiers (`identifier`, `uuid`) were appended to external Mojang API URLs. This could potentially allow an attacker to perform path traversal or inject query parameters.
+**Learning:** External API calls that include user input in the URL path must always have that input URL-encoded to prevent malicious injection, as external servers might interpret un-encoded characters unexpectedly.
+**Prevention:** Always URL-encode user-controlled identifiers (e.g., Minecraft usernames or UUIDs) using `java.net.URLEncoder.encode(input, StandardCharsets.UTF_8)` before incorporating them into URL strings, especially for external API calls.
