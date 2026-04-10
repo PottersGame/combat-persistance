@@ -44,7 +44,7 @@ public class AuthCommands {
                                 SkinManager.applySkin(player, player.getName().getString());
                             }
                         });
-                    });
+                    }, Combatpersistence.IO_EXECUTOR);
                     
                     return 1;
                 }))));
@@ -77,7 +77,7 @@ public class AuthCommands {
                                 }
                             }
                         });
-                    });
+                    }, Combatpersistence.IO_EXECUTOR);
                     
                     return 1;
                 })));

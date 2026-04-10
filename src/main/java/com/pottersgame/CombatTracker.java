@@ -204,7 +204,7 @@ public class CombatTracker {
         };
 
         if (async) {
-            CompletableFuture.runAsync(saveAction);
+            CompletableFuture.runAsync(saveAction, Combatpersistence.IO_EXECUTOR);
         } else {
             saveAction.run();
         }
