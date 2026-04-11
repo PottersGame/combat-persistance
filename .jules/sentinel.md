@@ -1,0 +1,4 @@
+## 2025-02-28 - [URL Injection Risk in Mojang API Integration]
+**Vulnerability:** User-controlled strings (like usernames or UUIDs) were concatenated directly into API request URLs for fetching custom skins. This lack of sanitization creates a risk of URL Injection, which could allow a malicious user to alter the structure of the API request, or potentially lead to Server-Side Request Forgery (SSRF) if the API path resolution can be manipulated.
+**Learning:** Even when interacting with trusted third-party APIs (like Mojang), dynamically built URLs must always have their variables URL-encoded. Direct string concatenation of user-provided data into a URI is dangerous and must be avoided.
+**Prevention:** Always URL-encode user-controlled identifiers (e.g., using `java.net.URLEncoder.encode(input, StandardCharsets.UTF_8)`) before appending them to URLs, to ensure the input is treated as a safe parameter and cannot manipulate the URL path structure.
