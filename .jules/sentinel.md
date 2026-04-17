@@ -1,0 +1,4 @@
+## 2024-05-24 - [Fix DoS and URL Injection in external API calls]
+**Vulnerability:** The application was making external API calls to the Mojang API without connection or read timeouts. It was also constructing URLs using unencoded user input, leaving it vulnerable to URL injection and server side request forgery (SSRF). Calling blocking operations on the common ForkJoinPool without timeouts can exhaust threads leading to Denial of Service (DoS).
+**Learning:** Hardcoded timeouts and URL encoding must be applied to all external HTTP requests constructed with user inputs.
+**Prevention:** Enforce usage of `java.net.URLEncoder.encode` on dynamic parameters. Enforce strict connection and read timeouts on all `HttpURLConnection` objects. Use a dedicated thread pool for blocking I/O operations instead of the common ForkJoinPool.
