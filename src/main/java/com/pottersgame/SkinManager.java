@@ -49,7 +49,8 @@ public class SkinManager {
                 
                 // 1. If identifier is a name, we must get the UUID first
                 if (identifier.length() <= 16) {
-                    URL nameUrl = URI.create("https://api.mojang.com/users/profiles/minecraft/" + identifier).toURL();
+                    String encodedIdentifier = java.net.URLEncoder.encode(identifier, java.nio.charset.StandardCharsets.UTF_8);
+                    URL nameUrl = URI.create("https://api.mojang.com/users/profiles/minecraft/" + encodedIdentifier).toURL();
                     HttpURLConnection nameConn = (HttpURLConnection) nameUrl.openConnection();
                     if (nameConn.getResponseCode() == 200) {
                         JsonObject nameResp = JsonParser.parseReader(new InputStreamReader(nameConn.getInputStream())).getAsJsonObject();
@@ -60,7 +61,8 @@ public class SkinManager {
                 }
 
                 // 2. Fetch the signed profile from Mojang sessionserver
-                URL url = URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + uuid + "?unsigned=false").toURL();
+                String encodedUuid = java.net.URLEncoder.encode(uuid, java.nio.charset.StandardCharsets.UTF_8);
+                URL url = URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + encodedUuid + "?unsigned=false").toURL();
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(5000);
