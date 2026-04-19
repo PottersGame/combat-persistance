@@ -1,0 +1,4 @@
+## 2024-05-18 - URL Injection Vulnerability in Mojang API Fetching
+**Vulnerability:** The codebase constructed URLs for external Mojang API calls by directly concatenating user-provided inputs (`identifier` and `uuid`) without any form of URL encoding. This created a significant Server-Side Request Forgery (SSRF) and URL injection vulnerability, potentially allowing malicious actors to manipulate the API requests.
+**Learning:** External API URLs that depend on user-controlled input must always safely encode that input to prevent structural manipulation of the resulting URL string. This is a crucial defense-in-depth measure.
+**Prevention:** Always use `java.net.URLEncoder.encode(input, java.nio.charset.StandardCharsets.UTF_8)` (or equivalent standard URL encoding functions) for any user-controlled identifier, username, or parameter before incorporating it into a URL.
