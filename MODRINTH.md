@@ -37,7 +37,7 @@ All settings can be customized in `config/combatpersistence.json`:
 
 - **Fabric Loader**
 - **Fabric API**
-- **Minecraft 26.1+**
+- **Minecraft 26.2+**
 - **Java 25+**
 
 ### 💎 Support
