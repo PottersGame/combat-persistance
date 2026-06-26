@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.Mannequin;
 import net.minecraft.world.item.ItemStack;
@@ -36,7 +37,7 @@ public class CombatNPC extends Mannequin {
     }
 
     public CombatNPC(ServerLevel world, UUID originalPlayerUuid, String originalPlayerName, List<ItemStack> inventory) {
-        super(EntityType.MANNEQUIN, world);
+        super(EntityTypes.MANNEQUIN, world);
         this.originalPlayerUuid = originalPlayerUuid;
         this.originalPlayerName = originalPlayerName;
         this.storedInventory.addAll(inventory);

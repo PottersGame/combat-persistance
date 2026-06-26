@@ -4,7 +4,7 @@ This repository is configured for rapid AI-driven development of a Minecraft Fab
 
 ## Mod Details
 - **Mod Loader:** Fabric
-- **Minecraft Version:** 26.1 (Latest)
+- **Minecraft Version:** 26.2 (Latest)
 - **Mappings:** Yarn / Intermediary
 
 ## AI Toolchain & Workflows
