@@ -44,6 +44,7 @@ public class CombatConfig {
     public boolean forceAuthInOfflineMode = true;
     public int sessionDurationHours = 24; 
     public boolean hideCoordinatesBeforeAuth = true;
+    public boolean hideInventoryBeforeAuth = true;
     public double lobbyX = 0, lobbyY = 1000, lobbyZ = 0; 
     public String lobbyDimension = "minecraft:overworld";
     public int authTimeoutSeconds = 60;

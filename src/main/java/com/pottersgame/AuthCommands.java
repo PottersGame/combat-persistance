@@ -96,30 +96,6 @@ public class AuthCommands {
                     player.sendSystemMessage(Component.literal(String.format(Combatpersistence.config.skinAppliedMessage, skinName)));
                     return 1;
                 })));
-
-            dispatcher.register(Commands.literal("premium")
-                .executes(context -> {
-                    ServerPlayer player = context.getSource().getPlayerOrException();
-                    if (!Combatpersistence.authManager.isAuthenticated(player)) {
-                        player.sendSystemMessage(Component.literal("§cYou must log in first!"));
-                        return 0;
-                    }
-
-                    player.sendSystemMessage(Component.literal("§6Verifying premium status..."));
-                    
-                    SkinManager.fetchSkin(player.getName().getString()).thenAccept(prop -> {
-                        context.getSource().getServer().execute(() -> {
-                            if (prop != null) {
-                                Combatpersistence.authManager.setPremium(player.getUUID(), true);
-                                player.sendSystemMessage(Component.literal("§a§lSUCCESS! §fPremium status verified. Your autologin session is now 30 days."));
-                            } else {
-                                player.sendSystemMessage(Component.literal("§cVerification failed! Could not find a premium account with your name."));
-                            }
-                        });
-                    });
-                    
-                    return 1;
-                }));
         });
     }
 }

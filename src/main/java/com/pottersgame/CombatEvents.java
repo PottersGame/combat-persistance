@@ -173,19 +173,23 @@ public class CombatEvents {
             if (config.enableAuth && (!server.usesAuthentication() || !config.forceAuthInOfflineMode)) {
                 if (Combatpersistence.authManager.checkAutoLogin(player)) {
                     player.sendSystemMessage(Component.literal("§aWelcome back! Autologin session verified."));
-                    
-                    // CRITICAL FIX: Auth Flow Data Loss - restore items even on autologin
-                    cleanUpNpc(player, tracker, server);
-                    handlePendingDeath(player);
 
-                    // Successful Session-login
+                    // onAuthenticated handles pending death, pre-auth inventory restore
+                    // and combat-NPC cleanup together in the correct order. Calling them
+                    // separately here too would double-restore and risk dupes/loss.
                     Combatpersistence.authManager.onAuthenticated(player);
-                    
+
                     String skin = Combatpersistence.authManager.getCustomSkin(uuid);
                     SkinManager.applySkin(player, skin != null ? skin : player.getName().getString());
                 } else {
                     player.setNoGravity(true);
                     player.setInvulnerable(true);
+
+                    // Hide the inventory from the client until the password is verified, so
+                    // an impostor sharing this offline UUID can't see the real owner's items.
+                    if (config.hideInventoryBeforeAuth) {
+                        Combatpersistence.authManager.stashInventory(player);
+                    }
 
                     if (config.hideCoordinatesBeforeAuth) {
                         Combatpersistence.authManager.saveLocation(player);
@@ -209,6 +213,10 @@ public class CombatEvents {
                     }
                 }
             } else {
+                // Auth is off (or this is an online-mode server). Recover any inventory
+                // that was stashed while auth was still enabled, so disabling auth can
+                // never strand a player's items in the pending-inventory file.
+                Combatpersistence.authManager.restorePreAuthInventory(player);
                 cleanUpNpc(player, tracker, server);
                 // If no auth, handle pending death immediately
                 handlePendingDeath(player);

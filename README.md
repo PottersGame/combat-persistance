@@ -11,8 +11,8 @@ Combat Persistence is a server-side Fabric mod for Minecraft that prevents comba
     *   **Persistence**: NPCs store player UUIDs in NBT, surviving chunk unloads and server restarts.
 *   **Offline Death**: If the NPC is killed, the player's items drop and they will die upon rejoining the server.
 *   **Authentication System**:
-    *   **Autologin**: Remembers IP and UUID for 24 hours (cracked) or 30 days (premium).
-    *   **Premium Verification**: Use `/premium` to verify accounts via Mojang's API.
+    *   **Autologin**: Remembers IP and UUID for a configurable session window (default 24 hours).
+    *   **Inventory Protection**: Hides a player's inventory until they enter their password, so an impostor sharing their offline UUID cannot view their items.
     *   **Lobby Support**: Teleports unauthenticated players to a safe lobby dimension.
 *   **Command Blocking**: Configurable list of commands blocked while in combat.
 *   **Server-Side**: No client-side installation required.
@@ -60,7 +60,6 @@ The configuration file is located at `config/combatpersistence.json`.
 
 *   **/register <password> <confirmPassword>**: Register your account.
 *   **/login <password>**: Login to your account.
-*   **/premium**: Verify premium status via Mojang API.
 *   **/skin <name>**: Change your skin using a Mojang account name.
 
 ## Security

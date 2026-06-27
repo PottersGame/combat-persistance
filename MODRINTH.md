@@ -11,8 +11,8 @@
 *   **Reliable Offline Deaths**: If your NPC is killed while you are offline, you will find yourself at the death screen upon rejoining. No "ghost items" or survival glitches.
 *   **Advanced Dupe Protection**: Rigorously tested logic that clears both the inventory and the **cursor stack** (carried items) immediately on disconnect to eliminate duplication exploits.
 *   **Built-in Secure Authentication**:
-    *   **Session Management**: Remembers your login state (24-hour session for cracked, **30 days for premium**).
-    *   **Premium Verification**: Use `/premium` to link your account to Mojang's official servers for enhanced security and convenience.
+    *   **Session Management**: Remembers your login state for a configurable session window (default 24 hours).
+    *   **Inventory Protection**: Hides your inventory until you log in, so nobody joining under your name can view your items.
     *   **Safe Limbo**: Teleports unauthenticated players to a lobby and hides their coordinates to prevent world-leaking.
 *   **Command Blocking**: Prevent players from running `/tp`, `/home`, or `/spawn` to escape a fight.
 *   **No Client Needed**: This is a 100% server-side mod. Your players don't need to install anything!

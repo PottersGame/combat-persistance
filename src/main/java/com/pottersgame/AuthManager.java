@@ -4,16 +4,23 @@ import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
 import org.mindrot.jbcrypt.BCrypt;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -28,17 +35,23 @@ public class AuthManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final File AUTH_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "auth_data.json");
     private static final File LOC_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "pending_locations.json");
+    private static final File INV_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "pending_inventories.json");
 
     private Map<UUID, UserData> users = new ConcurrentHashMap<>();
     private final Set<UUID> authenticatedPlayers = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private Map<UUID, OriginalLocation> preAuthLocations = new ConcurrentHashMap<>();
-    
+    // Inventory stashed (and hidden from the client) while a player is not yet
+    // authenticated. Stored as Base64-encoded compressed item NBT, keyed by UUID.
+    private Map<UUID, List<String>> preAuthInventories = new ConcurrentHashMap<>();
+
     private final ReentrantLock authSaveLock = new ReentrantLock();
     private final ReentrantLock locSaveLock = new ReentrantLock();
+    private final ReentrantLock invSaveLock = new ReentrantLock();
 
     public AuthManager() {
         loadUsers();
         loadLocations();
+        loadInventories();
     }
 
     public static class UserData {
@@ -46,7 +59,6 @@ public class AuthManager {
         public String lastIp;
         public long lastLoginTime;
         public String customSkin;
-        public boolean isPremium = false;
 
         public UserData(String hash, String ip) {
             this.passwordHash = hash;
@@ -62,9 +74,8 @@ public class AuthManager {
         String currentIp = getIp(player);
         long now = System.currentTimeMillis();
         long hoursSinceLastLogin = (now - data.lastLoginTime) / (1000 * 60 * 60);
-        
-        // Premium users get 30 days (720 hours), Cracked get 24 hours
-        long allowedHours = data.isPremium ? 720 : 24;
+
+        long allowedHours = Combatpersistence.config.sessionDurationHours;
 
         if (currentIp.equals(data.lastIp) && hoursSinceLastLogin < allowedHours) {
             authenticatedPlayers.add(player.getUUID());
@@ -74,14 +85,6 @@ public class AuthManager {
             return true;
         }
         return false;
-    }
-
-    public void setPremium(UUID uuid, boolean premium) {
-        UserData data = users.get(uuid);
-        if (data != null) {
-            data.isPremium = premium;
-            saveUsers();
-        }
     }
 
     public static class OriginalLocation {
@@ -134,18 +137,31 @@ public class AuthManager {
             authenticatedPlayers.add(player.getUUID());
         }
 
-        player.setNoGravity(false);
-        player.setInvulnerable(false);
+        // Keep the player frozen/invulnerable while we move and restore them, so
+        // re-enabling gravity mid-restore can't drop them or deal fall damage.
         player.removeEffect(MobEffects.SLOWNESS);
         player.removeEffect(MobEffects.MINING_FATIGUE);
-        
-        // Ensure pending deaths are handled BEFORE restoring location
+
+        // Pending death wins over everything: clear and kill before any restore.
         CombatEvents.handlePendingDeath(player);
-        
-        // Clean up any remaining NPC and restore inventory
+
+        // Restore the base inventory we hid during the login window FIRST. This
+        // also wipes any stale/duplicate live items, so the combat-NPC restore
+        // below (which only ADDS items) can neither be erased nor doubled up.
+        // A non-empty stash and an active combat NPC are mutually exclusive, so
+        // these two restores never operate on overlapping items.
+        restorePreAuthInventory(player);
+
+        // Then add back items that were moved to a combat-log NPC, if any.
         CombatEvents.cleanUpNpc(player, Combatpersistence.tracker, ((ServerLevel) player.level()).getServer());
-        
+
         restoreLocation(player);
+
+        // Land them cleanly: only now is it safe to re-enable physics.
+        player.setDeltaMovement(Vec3.ZERO);
+        player.resetFallDistance();
+        player.setNoGravity(false);
+        player.setInvulnerable(false);
     }
 
     public void logout(ServerPlayer player) {
@@ -178,6 +194,103 @@ public class AuthManager {
                 player.teleport(transition);
             }
         }
+    }
+
+    /**
+     * Hides a not-yet-authenticated player's inventory from their client by
+     * serializing it server-side and clearing the live inventory. This prevents
+     * an impostor (who shares an offline UUID with a registered player by simply
+     * using their name) from seeing the victim's items during the login window.
+     *
+     * Dupe/loss safety:
+     *  - The stash is the single source of truth. Once a stash exists for a UUID,
+     *    the live inventory is ALWAYS cleared on join until it is restored, so a
+     *    stale copy reloaded by vanilla after an unclean shutdown can never be
+     *    duplicated on top of the stash.
+     *  - The stash file is written SYNCHRONOUSLY before the live inventory is
+     *    cleared, so the items are durably backed up before the only other copy
+     *    is destroyed (no loss if the server dies mid-stash).
+     *  - The carried/cursor stack is stashed too, never silently discarded.
+     *
+     * Must be called on the server main thread.
+     */
+    public void stashInventory(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        if (preAuthInventories.containsKey(uuid)) {
+            // A stash is already authoritative for this player. Whatever is in the
+            // live inventory now is a stale duplicate (e.g. vanilla reloaded it
+            // after a crash before player.dat was overwritten) — drop it so it
+            // cannot be duplicated when the stash is restored.
+            clearLiveInventory(player);
+            return;
+        }
+        if (!(player.level() instanceof ServerLevel world)) return;
+
+        List<String> encoded = new ArrayList<>();
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            encodeStack(player.getInventory().getItem(i), world, encoded);
+        }
+        // Include the cursor/carried stack so an open-screen carry isn't lost.
+        encodeStack(player.containerMenu.getCarried(), world, encoded);
+
+        preAuthInventories.put(uuid, encoded);
+        // Synchronous: durably persist the stash BEFORE destroying the live copy.
+        saveInventories(false);
+        clearLiveInventory(player);
+    }
+
+    public void restorePreAuthInventory(ServerPlayer player) {
+        List<String> encoded = preAuthInventories.get(player.getUUID());
+        if (encoded == null) return; // No stash (e.g. normal autologin) — leave live inventory untouched.
+        if (!(player.level() instanceof ServerLevel world)) return;
+
+        // A stash existing means the live inventory should have been emptied at
+        // stash time. Anything present is a stale duplicate of the stash, so wipe
+        // it before restoring to guarantee a single copy.
+        clearLiveInventory(player);
+
+        for (String b64 : encoded) {
+            try {
+                byte[] bytes = Base64.getDecoder().decode(b64);
+                CompoundTag tag = NbtIo.readCompressed(new ByteArrayInputStream(bytes), NbtAccounter.unlimitedHeap());
+                ItemStack.CODEC.parse(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), tag)
+                    .resultOrPartial(e -> Combatpersistence.LOGGER.error("Failed to decode stashed item: {}", e))
+                    .ifPresent(stack -> {
+                        if (!player.getInventory().add(stack)) {
+                            player.drop(stack, false);
+                        }
+                    });
+            } catch (Exception e) {
+                Combatpersistence.LOGGER.error("Failed to restore pre-auth inventory item", e);
+            }
+        }
+
+        // Only now that the items are safely back in the live inventory do we drop
+        // the stash, and persist that removal synchronously so a crash can't leave
+        // a stash behind to be restored a second time (dupe).
+        preAuthInventories.remove(player.getUUID());
+        saveInventories(false);
+
+        player.containerMenu.sendAllDataToRemote();
+    }
+
+    private static void encodeStack(ItemStack stack, ServerLevel world, List<String> out) {
+        if (stack == null || stack.isEmpty()) return;
+        try {
+            CompoundTag tag = (CompoundTag) ItemStack.CODEC
+                .encodeStart(world.registryAccess().createSerializationContext(NbtOps.INSTANCE), stack)
+                .getOrThrow(e -> new RuntimeException("Failed to encode item: " + e));
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            NbtIo.writeCompressed(tag, baos);
+            out.add(Base64.getEncoder().encodeToString(baos.toByteArray()));
+        } catch (Exception e) {
+            Combatpersistence.LOGGER.error("Failed to stash pre-auth inventory item", e);
+        }
+    }
+
+    private static void clearLiveInventory(ServerPlayer player) {
+        player.getInventory().clearContent();
+        player.containerMenu.setCarried(ItemStack.EMPTY);
     }
 
     public void setCustomSkin(UUID uuid, String skinName) {
@@ -249,5 +362,36 @@ public class AuthManager {
                 locSaveLock.unlock();
             }
         });
+    }
+
+    private void loadInventories() {
+        if (INV_FILE.exists()) {
+            try (FileReader reader = new FileReader(INV_FILE)) {
+                Type type = new TypeToken<ConcurrentHashMap<UUID, List<String>>>(){}.getType();
+                Map<UUID, List<String>> loaded = GSON.fromJson(reader, type);
+                if (loaded != null) preAuthInventories = loaded;
+            } catch (IOException e) {
+                Combatpersistence.LOGGER.error("Failed to load pending inventories", e);
+            }
+        }
+    }
+
+    private void saveInventories(boolean async) {
+        Map<UUID, List<String>> copy = new HashMap<>(preAuthInventories);
+        Runnable action = () -> {
+            invSaveLock.lock();
+            try (FileWriter writer = new FileWriter(INV_FILE)) {
+                GSON.toJson(copy, writer);
+            } catch (IOException e) {
+                Combatpersistence.LOGGER.error("Failed to save pending inventories", e);
+            } finally {
+                invSaveLock.unlock();
+            }
+        };
+        if (async) {
+            CompletableFuture.runAsync(action);
+        } else {
+            action.run();
+        }
     }
 }
