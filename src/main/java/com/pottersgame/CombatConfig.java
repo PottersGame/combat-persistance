@@ -37,6 +37,9 @@ public class CombatConfig {
     public String authRequiredForChat = "§cYou must log in to chat!";
     public String authRequiredForSkin = "§cYou must log in to change your skin!";
     public String skinAppliedMessage = "§aApplied skin: %s";
+    public String accountResetKickMessage = "§eYour account was reset by an operator. Please reconnect and register again.";
+    public String accountResetSuccess = "§aReset account for %s. They must register again.";
+    public String accountResetNotRegistered = "§c%s is not registered.";
     public List<String> blockedCommands = new ArrayList<>();
 
     // SMP / Arena Settings
@@ -46,7 +49,16 @@ public class CombatConfig {
     // Auth Settings
     public boolean enableAuth = true;
     public boolean forceAuthInOfflineMode = true;
-    public int sessionDurationHours = 24; 
+    // IP-based auto-login is convenient but weak (shared NAT/VPN, and every player
+    // shares the proxy IP behind BungeeCord/Velocity). Off by default: require the
+    // password every session. Only enable on direct-connect servers you trust.
+    public boolean enableIpAutoLogin = false;
+    public int sessionDurationHours = 24;
+    // Brute-force protection for /login: lock the account after this many
+    // consecutive wrong passwords, for this many seconds.
+    public int maxLoginAttempts = 5;
+    public int loginLockoutSeconds = 300;
+    public String loginLockedOutMessage = "§cToo many failed attempts. Try again in %s seconds.";
     public boolean hideCoordinatesBeforeAuth = true;
     public boolean hideInventoryBeforeAuth = true;
     public double lobbyX = 0, lobbyY = 1000, lobbyZ = 0; 

@@ -26,6 +26,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,18 +57,33 @@ public class AuthManager {
 
     public static class UserData {
         public String passwordHash;
+        public String username;
         public String lastIp;
         public long lastLoginTime;
         public String customSkin;
 
-        public UserData(String hash, String ip) {
+        public UserData(String hash, String name, String ip) {
             this.passwordHash = hash;
+            this.username = name;
             this.lastIp = ip;
             this.lastLoginTime = System.currentTimeMillis();
         }
     }
 
+    /** Tracks consecutive failed /login attempts for brute-force lockout. In-memory only. */
+    private static class LoginAttempts {
+        int count;
+        long lockedUntil;
+    }
+
+    private final Map<UUID, LoginAttempts> loginAttempts = new ConcurrentHashMap<>();
+
+    public enum LoginResult { SUCCESS, WRONG_PASSWORD, LOCKED_OUT }
+
     public boolean checkAutoLogin(ServerPlayer player) {
+        // IP auto-login is opt-in; without it players re-enter their password each session.
+        if (!Combatpersistence.config.enableIpAutoLogin) return false;
+
         UserData data = users.get(player.getUUID());
         if (data == null) return false;
 
@@ -113,22 +129,52 @@ public class AuthManager {
 
     public void register(ServerPlayer player, String password) {
         String hash = BCrypt.hashpw(password, BCrypt.gensalt());
-        UserData data = new UserData(hash, getIp(player));
+        UserData data = new UserData(hash, player.getName().getString(), getIp(player));
         users.put(player.getUUID(), data);
         authenticatedPlayers.add(player.getUUID());
         saveUsers();
     }
 
-    public boolean login(ServerPlayer player, String password) {
-        UserData data = users.get(player.getUUID());
-        if (data != null && BCrypt.checkpw(password, data.passwordHash)) {
-            data.lastIp = getIp(player);
-            data.lastLoginTime = System.currentTimeMillis();
-            authenticatedPlayers.add(player.getUUID());
-            saveUsers();
-            return true;
+    public LoginResult login(ServerPlayer player, String password) {
+        UUID uuid = player.getUUID();
+        long now = System.currentTimeMillis();
+
+        LoginAttempts att = loginAttempts.get(uuid);
+        if (att != null && att.lockedUntil > now) {
+            return LoginResult.LOCKED_OUT;
         }
-        return false;
+
+        UserData data = users.get(uuid);
+        if (data != null && BCrypt.checkpw(password, data.passwordHash)) {
+            loginAttempts.remove(uuid);
+            data.lastIp = getIp(player);
+            data.lastLoginTime = now;
+            data.username = player.getName().getString(); // backfill/refresh for name-based admin lookups
+            authenticatedPlayers.add(uuid);
+            saveUsers();
+            return LoginResult.SUCCESS;
+        }
+
+        // Wrong password: record the failure and lock out once the limit is hit.
+        if (att == null) {
+            att = new LoginAttempts();
+            loginAttempts.put(uuid, att);
+        }
+        att.count++;
+        if (att.count >= Combatpersistence.config.maxLoginAttempts) {
+            att.lockedUntil = now + Combatpersistence.config.loginLockoutSeconds * 1000L;
+            att.count = 0;
+            return LoginResult.LOCKED_OUT;
+        }
+        return LoginResult.WRONG_PASSWORD;
+    }
+
+    /** Seconds remaining on a login lockout for this UUID, or 0 if not locked out. */
+    public int getLockoutSecondsRemaining(UUID uuid) {
+        LoginAttempts att = loginAttempts.get(uuid);
+        if (att == null) return 0;
+        long remaining = att.lockedUntil - System.currentTimeMillis();
+        return remaining > 0 ? (int) Math.ceil(remaining / 1000.0) : 0;
     }
 
     // This MUST be called on the Server Main Thread
@@ -166,6 +212,41 @@ public class AuthManager {
 
     public void logout(ServerPlayer player) {
         authenticatedPlayers.remove(player.getUUID());
+    }
+
+    /**
+     * Operator action: wipe a player's registration so they must register again
+     * with a new password. Also clears any live authenticated session for that
+     * UUID. Returns true if a registration existed and was removed.
+     *
+     * The caller should disconnect the player (if online) afterwards so they
+     * re-enter the normal join/lobby flow cleanly on reconnect.
+     */
+    public boolean resetUser(UUID uuid) {
+        authenticatedPlayers.remove(uuid);
+        loginAttempts.remove(uuid);
+        boolean existed = users.remove(uuid) != null;
+        if (existed) saveUsers();
+        return existed;
+    }
+
+    /**
+     * Resolve a registered player's UUID from a name, for operator commands that
+     * must work on offline players too. Tries stored usernames first, then (on
+     * offline-mode servers) the deterministic offline UUID vanilla derives from
+     * the name. Returns null if no matching registration exists.
+     */
+    public UUID findRegisteredUuidByName(String name, boolean onlineMode) {
+        for (Map.Entry<UUID, UserData> e : users.entrySet()) {
+            if (name.equalsIgnoreCase(e.getValue().username)) {
+                return e.getKey();
+            }
+        }
+        if (!onlineMode) {
+            UUID offline = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+            if (users.containsKey(offline)) return offline;
+        }
+        return null;
     }
 
     public void saveLocation(ServerPlayer player) {
