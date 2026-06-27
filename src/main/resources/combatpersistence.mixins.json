@@ -5,7 +5,8 @@
 	"mixins": [
 		"CombatCommandMixin",
 		"CombatDeathMixin",
-		"CombatPickupMixin"
+		"CombatPickupMixin",
+		"EnderChestBlockMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

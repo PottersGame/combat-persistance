@@ -21,7 +21,6 @@ import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnder
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.EnderChestBlock;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
 
@@ -40,16 +39,12 @@ public class CombatEvents {
 
                 Entity attackerEntity = source.getEntity();
                 
-                // Tag if attacked by another player
+                // Only tag on player-vs-player damage (no PvE/environmental tagging)
                 if (attackerEntity instanceof ServerPlayer attacker && Combatpersistence.authManager.isAuthenticated(attacker)) {
                     if (victim != attacker && !victim.getAbilities().instabuild && !attacker.getAbilities().instabuild) {
                         tracker.tag(victim, config.combatTagDurationSeconds);
                         tracker.tag(attacker, config.combatTagDurationSeconds);
                     }
-                } 
-                // ALSO tag if attacked by a mob (PvE)
-                else if (attackerEntity instanceof net.minecraft.world.entity.LivingEntity) {
-                    tracker.tag(victim, config.combatTagDurationSeconds);
                 }
             }
             if (entity instanceof CombatNPC victimNpc) {
@@ -87,11 +82,8 @@ public class CombatEvents {
                 if (!Combatpersistence.authManager.isAuthenticated(sp)) {
                     return InteractionResult.FAIL;
                 }
-                if (config.disableEnderChests
-                        && world.getBlockState(hitResult.getBlockPos()).getBlock() instanceof EnderChestBlock) {
-                    sp.sendSystemMessage(Component.literal(config.enderChestDisabledMessage), true);
-                    return InteractionResult.FAIL;
-                }
+                // Ender chest blocking is handled in EnderChestBlockMixin so it reliably
+                // stops the menu from opening (the UseBlockCallback did not).
             }
             return InteractionResult.PASS;
         });
