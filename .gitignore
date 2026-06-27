@@ -31,6 +31,7 @@ bin/
 # fabric
 
 run/
+logs/
 
 # java
 
@@ -39,6 +40,12 @@ replay_*.log
 *.hprof
 *.jfr
 
-.gemini/
+# AI assistant configs / local tooling (keep the mc-lookup helper, drop the rest)
+.gemini/*
+!.gemini/mc-lookup.py
+.gemini/__pycache__/
 .rtk/
+.claude/
+GEMINI.md
+CLAUDE.md
 gha-creds-*.json

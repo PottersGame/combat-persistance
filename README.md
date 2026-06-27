@@ -11,9 +11,13 @@ Combat Persistence is a server-side Fabric mod for Minecraft that prevents comba
     *   **Persistence**: NPCs store player UUIDs in NBT, surviving chunk unloads and server restarts.
 *   **Offline Death**: If the NPC is killed, the player's items drop and they will die upon rejoining the server.
 *   **Authentication System**:
-    *   **Autologin**: Remembers IP and UUID for a configurable session window (default 24 hours).
-    *   **Inventory Protection**: Hides a player's inventory until they enter their password, so an impostor sharing their offline UUID cannot view their items.
+    *   **BCrypt Hashing**: Passwords are hashed, never stored in plaintext.
+    *   **Session Autologin**: Remembers a session for a configurable window (default 24 hours). Optional IP-based autologin is **off by default** (weak behind shared NAT/proxies).
+    *   **Brute-Force Lockout**: Locks an account after too many failed `/login` attempts.
+    *   **Inventory Protection**: Hides a player's inventory and coordinates until they enter their password, so an impostor sharing their offline UUID cannot view their items.
+    *   **Operator Reset**: `/authreset <player>` lets staff wipe a forgotten or compromised account.
     *   **Lobby Support**: Teleports unauthenticated players to a safe lobby dimension.
+*   **Arena/SMP Tools**: Optionally disable ender chests server-wide (blocked via mixin).
 *   **Command Blocking**: Configurable list of commands blocked while in combat.
 *   **Server-Side**: No client-side installation required.
 
@@ -32,12 +36,22 @@ The configuration file is located at `config/combatpersistence.json`.
 | `inventoryRestoredMessage` | `§aYour inventory has been restored.` | Message sent when a player's inventory is restored. |
 | `blockedCommands` | `[...]` | List of commands disabled during combat (e.g., /spawn, /home). |
 
+### Arena / SMP Settings
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `disableEnderChests` | `false` | Blocks ender chest use server-wide (via mixin). |
+| `enderChestDisabledMessage` | `§cEnder chests are disabled on this server.` | Message shown when a blocked ender chest is opened. |
+
 ### Authentication Settings
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `enableAuth` | `true` | Enables the built-in authentication system. |
 | `forceAuthInOfflineMode` | `true` | Requires authentication even if the server is in offline mode. |
+| `enableIpAutoLogin` | `false` | Optional IP-based autologin. Off by default (weak behind shared NAT/proxies). |
 | `sessionDurationHours` | 24 | How long an autologin session lasts for standard players. |
+| `maxLoginAttempts` | 5 | Failed `/login` attempts before lockout. |
+| `loginLockoutSeconds` | 300 | Lockout duration after too many failed attempts. |
+| `hideInventoryBeforeAuth` | `true` | Conceals the player's inventory until they log in. |
 | `hideCoordinatesBeforeAuth`| `true` | Conceals the player's location from unauthenticated users. |
 | `authTimeoutSeconds` | 60 | Time in seconds before an unauthenticated player is kicked. |
 | `loginTimeoutMessage` | `§cLogin timeout!` | Kick message when authentication times out. |
@@ -53,7 +67,7 @@ The configuration file is located at `config/combatpersistence.json`.
 | `authRequiredForChat` | `§cYou must log in to chat!` | Error message when chatting without auth. |
 | `authRequiredForSkin` | `§cYou must log in to change your skin!` | Error message when changing skins without auth. |
 | `skinAppliedMessage` | `§aApplied skin: %s` | Message confirming skin application. |
-| `lobbyDimension` | `overworld` | The dimension where unauthenticated players are held. |
+| `lobbyDimension` | `minecraft:overworld` | The dimension where unauthenticated players are held. |
 | `lobbyX, lobbyY, lobbyZ` | `0, 1000, 0` | The coordinates for the authentication lobby. |
 
 ## Commands
@@ -61,6 +75,7 @@ The configuration file is located at `config/combatpersistence.json`.
 *   **/register <password> <confirmPassword>**: Register your account.
 *   **/login <password>**: Login to your account.
 *   **/skin <name>**: Change your skin using a Mojang account name.
+*   **/authreset <player>**: *(Operator only)* Reset a player's account so they must register again.
 
 ## Security
 

@@ -62,7 +62,7 @@ jar {
 
 modrinth {
 	token = System.getenv("MODRINTH_TOKEN")
-	projectId = "combat-persistence" // PLEASE REPLACE THIS WITH YOUR ACTUAL PROJECT ID/SLUG
+	projectId = "combat-persistence" // Modrinth project slug — verify it matches your project URL
 	versionNumber = project.version
 	versionType = "release"
 	gameVersions = [project.minecraft_version]
