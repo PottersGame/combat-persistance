@@ -27,36 +27,81 @@ import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 public class SkinManager {
 
     private static final Map<String, Property> skinCache = new ConcurrentHashMap<>();
+
+    // Mojang usernames: 1-16 chars, letters/digits/underscore only.
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_]{1,16}$");
+    // Mojang UUIDs: 32 hex chars (undashed) or the standard dashed form.
+    private static final Pattern UUID_PATTERN =
+        Pattern.compile("^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+
+    // Dedicated bounded pool for blocking HTTP calls so we never starve the
+    // shared common ForkJoinPool (used by the server for parallel streams etc.).
+    private static final Executor SKIN_EXECUTOR = Executors.newFixedThreadPool(4, new ThreadFactory() {
+        private final AtomicInteger counter = new AtomicInteger(1);
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r, "combat-persistence-skin-fetch-" + counter.getAndIncrement());
+            t.setDaemon(true);
+            return t;
+        }
+    });
 
     /**
      * Fetches skin properties asynchronously from the Mojang API.
      * This bypasses the need for the server to be in online mode.
      */
     public static CompletableFuture<Property> fetchSkin(String identifier) {
+        if (identifier == null) {
+            return CompletableFuture.completedFuture(null);
+        }
         if (skinCache.containsKey(identifier)) {
             return CompletableFuture.completedFuture(skinCache.get(identifier));
+        }
+
+        // Reject anything that isn't a plain Mojang username or UUID before it ever
+        // reaches a URL. This prevents URL/path injection and SSRF via crafted input.
+        boolean looksLikeUuid = UUID_PATTERN.matcher(identifier).matches();
+        boolean looksLikeName = USERNAME_PATTERN.matcher(identifier).matches();
+        if (!looksLikeUuid && !looksLikeName) {
+            Combatpersistence.LOGGER.warn("Rejected skin lookup for invalid identifier: {}", identifier);
+            return CompletableFuture.completedFuture(null);
         }
 
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String uuid = identifier;
-                
+
                 // 1. If identifier is a name, we must get the UUID first
-                if (identifier.length() <= 16) {
+                if (looksLikeName && !looksLikeUuid) {
                     URL nameUrl = URI.create("https://api.mojang.com/users/profiles/minecraft/" + identifier).toURL();
                     HttpURLConnection nameConn = (HttpURLConnection) nameUrl.openConnection();
+                    nameConn.setRequestMethod("GET");
+                    nameConn.setConnectTimeout(5000);
+                    nameConn.setReadTimeout(5000);
                     if (nameConn.getResponseCode() == 200) {
                         JsonObject nameResp = JsonParser.parseReader(new InputStreamReader(nameConn.getInputStream())).getAsJsonObject();
                         uuid = nameResp.get("id").getAsString();
                     } else {
                         return null; // Player not found or rate limited
                     }
+                }
+
+                // The UUID returned by the name lookup is attacker-influenced data;
+                // re-validate it before building the second URL.
+                if (!UUID_PATTERN.matcher(uuid).matches()) {
+                    Combatpersistence.LOGGER.warn("Rejected skin lookup: resolved UUID is not valid for {}", identifier);
+                    return null;
                 }
 
                 // 2. Fetch the signed profile from Mojang sessionserver
@@ -88,7 +133,7 @@ public class SkinManager {
                 Combatpersistence.LOGGER.error("Failed to fetch skin {} from Mojang API", identifier, e);
             }
             return null;
-        });
+        }, SKIN_EXECUTOR);
     }
 
     private static MinecraftServer getServer(ServerPlayer player) {

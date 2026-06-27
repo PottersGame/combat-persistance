@@ -40,4 +40,5 @@ replay_*.log
 *.jfr
 
 .gemini/
+.rtk/
 gha-creds-*.json
