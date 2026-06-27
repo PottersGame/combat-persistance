@@ -21,6 +21,7 @@ import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnder
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.EnderChestBlock;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
 
@@ -84,6 +85,11 @@ public class CombatEvents {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (player instanceof ServerPlayer sp) {
                 if (!Combatpersistence.authManager.isAuthenticated(sp)) {
+                    return InteractionResult.FAIL;
+                }
+                if (config.disableEnderChests
+                        && world.getBlockState(hitResult.getBlockPos()).getBlock() instanceof EnderChestBlock) {
+                    sp.sendSystemMessage(Component.literal(config.enderChestDisabledMessage), true);
                     return InteractionResult.FAIL;
                 }
             }

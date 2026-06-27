@@ -39,6 +39,10 @@ public class CombatConfig {
     public String skinAppliedMessage = "§aApplied skin: %s";
     public List<String> blockedCommands = new ArrayList<>();
 
+    // SMP / Arena Settings
+    public boolean disableEnderChests = false;
+    public String enderChestDisabledMessage = "§cEnder chests are disabled on this server.";
+
     // Auth Settings
     public boolean enableAuth = true;
     public boolean forceAuthInOfflineMode = true;
